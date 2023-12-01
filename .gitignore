@@ -155,3 +155,6 @@ fabric.properties
 
 /src/models/d_search/img/
 /src/timeseries/moo/output/
+
+output/
+outputs/
