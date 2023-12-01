@@ -7,7 +7,7 @@ import joblib
 def get_new_file_path(file_path, extension, use_date_suffix):
     if not isinstance(file_path, list):
         path = os.path.dirname(file_path)
-        filename = file_path.split('\\')[-1]
+        filename = file_path.split('/')[-1]
     else:
         path = os.path.join(*file_path[:-1])
         filename = file_path[-1]
