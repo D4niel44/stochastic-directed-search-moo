@@ -157,4 +157,5 @@ fabric.properties
 /src/timeseries/moo/output/
 
 output/
+output_*/
 outputs/
