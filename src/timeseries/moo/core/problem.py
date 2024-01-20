@@ -30,6 +30,8 @@ class TsQuantileProblem(TFSplitProblem):
             intermediate_layers = ['layer_normalization_36', 'time_distributed_144']
         elif moo_model_size == 'small':
             intermediate_layers = ['layer_normalization_40']
+        elif moo_model_size == 'large':
+            intermediate_layers = ['layer_normalization_4', 'layer_normalization_5', 'tf.math.reduce_sum_1', 'tf.math.reduce_sum_2', 'time_distributed_144']
         else:
             raise NotImplementedError
 
