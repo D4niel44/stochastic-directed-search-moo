@@ -4,7 +4,7 @@ import datetime
 import numpy as np
 import pandas as pd
 from deap.tools._hypervolume import hv
-from pymoo.factory import get_performance_indicator
+from pymoo.indicators.hv import HV
 
 from src.models.attn import utils
 from src.models.attn.utils import extract_numerical_data
@@ -392,7 +392,7 @@ def get_hypervolume(pop, ref=None):
 
 def get_hvs_from_log(hist, lib='deap'):
     pops_obj, ref = get_deap_pops_obj(hist) if lib == 'deap' else get_pymoo_pops_obj(hist)
-    hv = get_performance_indicator("hv", ref_point=ref)
+    hv = HV(ref_point=ref)
     hypervols = [hv.do(pop_obj) for pop_obj in pops_obj]
     return hypervols
 

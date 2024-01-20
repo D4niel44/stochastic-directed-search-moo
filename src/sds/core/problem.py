@@ -1,6 +1,6 @@
 import numpy as np
 from pymoo.core.problem import ElementwiseProblem
-from pymoo.problems.autodiff import AutomaticDifferentiation
+from pymoo.gradient.automatic import AutomaticDifferentiation
 
 
 class ContinuationProblem(ElementwiseProblem):
