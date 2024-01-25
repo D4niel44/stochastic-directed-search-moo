@@ -15,6 +15,7 @@ def metrics_of_pf(F, ref=[2., 2.]):
     if F is not None:
         dist_points = norm_between_points(F)
         return {'count': F.shape[0],
+                'F': F,
                 'distances': dist_points,
                 'hv': get_hypervolume(F, ref=ref),
                 'mean norm': np.mean(dist_points),
