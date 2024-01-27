@@ -21,12 +21,12 @@ def get_median_run(results):
     sorted_results = sorted(results, key=lambda r: r[-1]['hv'])
     return sorted_results[len(sorted_results)//2]
 
-def load_results(path, moeas, n_repeat):
+def load_results(path, moeas, n_repeat, skip_train_metrics=True):
     res_dict = {}
     times_dict = {}
-    sol_dict = {}
+    last_idx = -2 if skip_train_metrics else -3
     for moea in moeas:
-        results = [joblib.load(f'{path}{moea.__name__}_{problem_size}_results_{seed}.z')[-2:] for seed in range(n_repeat)]
+        results = [joblib.load(f'{path}{moea.__name__}_{problem_size}_results_{seed}.z')[last_idx:] for seed in range(n_repeat)]
         times_dict[moea] = [r[0] for r in results]
         res_dict[moea] = [r[1] for r in results]
     return times_dict, res_dict
@@ -105,7 +105,7 @@ def graph_cd_diagram(res_dict, path, moeas, ref, recalculate_hv=False, file_pref
     runs_df = pd.DataFrame.from_records(run_res)
     print(runs_df)
     runs_df.to_csv(f'{path}seed_results.csv')
-    draw_cd_diagram(df_perf=runs_df, key_name='hv', labels=True, path=path, filename=f'{file_prefix}cd_diagram{"_updated_hv" if recalculate_hv else ""}.png')
+    draw_cd_diagram(df_perf=runs_df, key_name='hv', labels=True, path=path, filename=f'{file_prefix}cd_diagram.png')
 
 def mean_std_table(times_dict, res_dict, path, moeas, ref, recalculate_hv=False, file_prefix=''):
     gens_res = []
@@ -142,6 +142,7 @@ if __name__ == '__main__':
     parser.add_argument('--ref_point', dest='ref_point', type=parse_reference_point_arg, default=None, help='provide a custom reference point for HV')
     parser.add_argument('path', help='path to store the experiment folder')
     parser.add_argument('--file_prefix', default='', help='prefix to add to file names')
+    parser.add_argument('--subfolder_name', default='results', help='name of the subfolder that will contain the output of this script (defaults to results)')
 
     args = parser.parse_args()
 
@@ -155,19 +156,22 @@ if __name__ == '__main__':
     n_repeat = args.end_seed if args.end_seed is not None else config['number_runs']
     pop_size = config['population_size']
     n_gen = config['generations']
+    skip_train_metrics = config['skip_train_metrics'] if 'skip_train_metrics' in config else True
     path = args.path
+    output_path = os.path.join(path, args.subfolder_name)
     file_prefix = args.file_prefix
     ## ------------------------------------
 
-    times_dict, res_dict = load_results(path, moeas, n_repeat)
+    times_dict, res_dict = load_results(path, moeas, n_repeat, skip_train_metrics)
 
     ref_point = args.ref_point if args.ref_point is not None else get_reference_point(res_dict, moeas, n_repeat)
     recalculate_hv = not args.default_hv
 
-    write_text_file(f'{path}reference_point', str(ref_point))
+    os.makedirs(output_path, exist_ok=True) 
 
-    graph_evo(res_dict, path, moeas, n_repeat, ref_point, recalculate_hv, file_prefix)
-    graph_median_evo(res_dict, path, moeas, ref_point, recalculate_hv, file_prefix)
-    graph_pareto_front(res_dict, path, moeas, n_repeat, file_prefix)
-    graph_cd_diagram(res_dict, path, moeas, ref_point, recalculate_hv, file_prefix)
-    mean_std_table(times_dict, res_dict, path, moeas, ref_point, recalculate_hv, file_prefix)
+    write_text_file(os.path.join(output_path, 'reference_point'), str(ref_point))
+    graph_evo(res_dict, output_path, moeas, n_repeat, ref_point, recalculate_hv, file_prefix)
+    graph_median_evo(res_dict, output_path, moeas, ref_point, recalculate_hv, file_prefix)
+    graph_pareto_front(res_dict, output_path, moeas, n_repeat, file_prefix)
+    graph_cd_diagram(res_dict, output_path, moeas, ref_point, recalculate_hv, file_prefix)
+    mean_std_table(times_dict, res_dict, output_path, moeas, ref_point, recalculate_hv, file_prefix)

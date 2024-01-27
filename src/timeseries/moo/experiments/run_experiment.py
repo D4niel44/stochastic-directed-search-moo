@@ -24,17 +24,19 @@ from pymoo.operators.crossover.sbx import SBX
 from pymoo.termination import get_termination
 from pymoo.optimize import minimize
 
-from timeseries.moo.experiments.config import moea_map
+from src.timeseries.moo.experiments.config import moea_map
 
 class MetricsCallback(Callback):
 
-    def __init__(self, problem, t0, ref_point) -> None:
+    def __init__(self, problem, t0, ref_point, skip_train_metrics=False) -> None:
         super().__init__()
         self.problem = problem
         self.t0 = t0
         self.data["metrics"] = []
         self.data["times"] = []
+        self.data["train_metrics"] = []
         self.ref_point = ref_point
+        self.skip_train_metrics = skip_train_metrics
 
     def notify(self, algorithm, **kwargs):
         X = algorithm.pop.get("X")
@@ -43,6 +45,10 @@ class MetricsCallback(Callback):
         moea_metrics = metrics_of_pf(F_moea_sorted, ref=self.ref_point)
         self.data["metrics"].append(moea_metrics)
         self.data["times"].append(time.time() - t0)
+
+        if not skip_train_metrics:
+            train_metrics = metrics_of_pf(algorithm.pop.get("F"), ref=self.ref_point)
+            self.data["train_metrics"].append(train_metrics)
 
 def optimal_reference_point(problem_size):
     if problem_size == 'small':
@@ -72,6 +78,7 @@ if __name__ == '__main__':
     n_repeat = args.end_seed if args.end_seed is not None else config['number_runs']
     pop_size = config['population_size']
     n_gen = config['generations']
+    skip_train_metrics = config['skip_train_metrics']
     ## ------------------------------------
 
     sds_cfg['model']['ix'] = get_input_args()['model_ix']
@@ -102,13 +109,6 @@ if __name__ == '__main__':
                     mutation=PolynomialMutation(eta=20),
                 )
             else:
-                # no constraints
-                #problem.n_ieq_constr = 2
-                #if sds_cfg["problem"]["split_model"] == 'small':
-                #    problem.constraints_limits = [0.459, .583]
-                #else:
-                #    problem.constraints_limits = [1.0, 1.0]
-
                 algorithm = moea(
                     pop_size=pop_size,
                     n_offsprings=pop_size,
@@ -128,8 +128,14 @@ if __name__ == '__main__':
                            verbose=True,
                            callback=MetricsCallback(problem, t0, optimal_reference_point(problem_size)))
 
-            joblib.dump(
-                (res.opt, res.algorithm.callback.data["times"], res.algorithm.callback.data["metrics"]),
-                os.path.join(args.path, f'{moea.__name__}_{sds_cfg["problem"]["split_model"]}_results_{seed}.z'),
-                compress=9)
+            if skip_train_metrics:
+                joblib.dump(
+                 (res.opt, res.algorithm.callback.data["times"], res.algorithm.callback.data["metrics"]),
+                 os.path.join(args.path, f'{moea.__name__}_{sds_cfg["problem"]["split_model"]}_results_{seed}.z'),
+                 compress=9)
+            else:
+                joblib.dump(
+                 (res.opt, res.algorithm.callback.data["times"], res.algorithm.callback.data["metrics"], res.algorithm.callback.data["train_metrics"]),
+                 os.path.join(args.path, f'{moea.__name__}_{sds_cfg["problem"]["split_model"]}_results_{seed}.z'),
+                 compress=9)
         

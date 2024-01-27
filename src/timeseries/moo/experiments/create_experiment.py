@@ -3,7 +3,7 @@ import os
 import yaml
 
 
-from timeseries.moo.experiments.config import moea_map, supported_moeas, supported_problem_sizes 
+from src.timeseries.moo.experiments.config import moea_map, supported_moeas, supported_problem_sizes 
 
 # %%
 if __name__ == '__main__':
@@ -20,6 +20,7 @@ if __name__ == '__main__':
                         help=f'size of the problem (required, available sizes are: {supported_problem_sizes})')
     parser.add_argument('-p', '--pop_size', type=int, dest='pop_size', required=True, help='size of the population (required)')
     parser.add_argument('-r', '--num_runs', type=int, dest='num_runs', required=True, help='number of runs of the experiment (required)')
+    parser.add_argument('--skip_train_metrics', action='store_true', help="don't store metrics each generation using the train dataset (only the validation dataset will be used)")
     parser.add_argument('path', help='path to store the experiment folder')
 
     args = parser.parse_args()
@@ -33,6 +34,7 @@ if __name__ == '__main__':
         'population_size': args.pop_size,
         'generations': args.generations,
         'number_runs': args.num_runs,
+        'skip_train_metrics': args.skip_train_metrics,
     }
 
     with open(os.path.join(p, 'config.yaml'), 'w') as file:
