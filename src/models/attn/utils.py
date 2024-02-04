@@ -87,7 +87,6 @@ def tensorflow_quantile_loss(y, y_pred, quantile):
     prediction_underflow = y - y_pred
     q_loss = quantile * tf.maximum(prediction_underflow, 0.) + (
             1. - quantile) * tf.maximum(-prediction_underflow, 0.)
-
     return tf.math.reduce_sum(q_loss, axis=-1)
 
 
@@ -130,6 +129,45 @@ def tensorflow_quantile_loss_moo(y, y_pred, quantile):
     normaliser = tf.reduce_mean(tf.math.abs(y))
 
     return [2. * quantile_loss_1 / normaliser, 2. * quantile_loss_2 / normaliser]
+
+def tensorflow_quantile_loss_moo_no_normalization(y, y_pred, quantile):
+    """Computes quantile loss for tensorflow.
+
+  Standard quantile loss as defined in the "Training Procedure" section of
+  the main TFT paper
+
+  Args:
+    y: Targets
+    y_pred: Predictions
+    quantile: Quantile to use for loss calculations (between 0 & 1)
+
+  Returns:
+    Tensor for quantile loss.
+  """
+
+    # Checks quantile
+    if quantile < 0 or quantile > 1:
+        raise ValueError(
+            'Illegal quantile value={}! Values should be between 0 and 1.'.format(
+                quantile))
+
+    y = tf.convert_to_tensor(y, dtype=tf.float32)
+
+    prediction_underflow = y - y_pred
+
+    gamma = tf.cast(tf.constant(quantile >= 0.5), tf.float32)
+
+    weighted_errors_1 = gamma * quantile * tf.maximum(prediction_underflow, 0.) \
+                        + (1. - gamma) * (1. - quantile) * tf.maximum(-prediction_underflow, 0.)
+
+    weighted_errors_2 = (1. - gamma) * quantile * tf.maximum(prediction_underflow, 0.) \
+                        + gamma * (1. - quantile) * tf.maximum(-prediction_underflow, 0.)
+
+    quantile_loss_1 = tf.reduce_sum(tf.squeeze(weighted_errors_1))
+    quantile_loss_2 = tf.reduce_sum(tf.squeeze(weighted_errors_2))
+
+    return [quantile_loss_1, quantile_loss_2]
+
 
 
 def numpy_normalised_weighted_errors(y, y_pred, quantile):

@@ -60,7 +60,7 @@ def optimal_reference_point(problem_size):
 # %%
 if __name__ == '__main__':
     ## --------------- CFG ---------------
-    parser = argparse.ArgumentParser(description='Create experiment folder and config.')
+    parser = argparse.ArgumentParser(description='Run experiment.')
     parser.add_argument('--start', type=int, dest='start_seed', default=0, help='start running the experiment at the given seed')
     parser.add_argument('--end', type=int, dest='end_seed', default=None, help='end running the experiment before the given seed (exclusive)')
     parser.add_argument('path', help='path to store the experiment folder')

@@ -103,14 +103,16 @@ def get_one_output_model(model, output_layer_name):
                           outputs=model.get_layer(output_layer_name).output)
 
 
-def split_model(model, intermediate_layers):
+def split_model(model, intermediate_layers, compile=True):
     base_model = tf.keras.Model(inputs=model.inputs,
                                 outputs=[model.get_layer(l).output for l in intermediate_layers])
 
     trainable_model = tf.keras.Model(inputs=[model.get_layer(l).output for l in intermediate_layers],
                                      outputs=model.outputs, )
 
-    base_model.compile()
-    trainable_model.compile()
+    if compile:
+        base_model.compile()
+        trainable_model.compile()
+
     return {'base_model': base_model,
             'trainable_model': trainable_model}
