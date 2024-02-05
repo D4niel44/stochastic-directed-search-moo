@@ -1,3 +1,4 @@
+import os
 import joblib
 
 
@@ -7,7 +8,7 @@ def load_results(path, moeas, n_repeat, problem_size):
     for moea in moeas:
         results = []
         for seed in range(n_repeat):
-            res = joblib.load(f'{path}{moea.__name__}_{problem_size}_results_{seed}.z')
+            res = joblib.load(os.path.join(path, f'{moea.__name__}_{problem_size}_results_{seed}.z'))
             if len(res) == 3: #results without training metrics
                 # (sol, times, metrics) - sol is discarded
                 results.append(res[1:])
