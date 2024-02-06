@@ -12,14 +12,11 @@ from pymoo.core.callback import Callback
 from src.timeseries.moo.sds.config import sds_cfg
 from src.timeseries.moo.core.harness import get_model_and_params
 from src.timeseries.moo.sds.utils.bash import get_input_args
-from src.timeseries.moo.sds.utils.indicators import metrics_of_pf
 from src.timeseries.moo.sds.utils.util import get_from_dict
-from src.timeseries.utils.moo import sort_1st_col
 
 from src.models.attn.nn_funcs import QuantileLossCalculator
 
-from src.sds.nn.utils import reconstruct_weights, params_conversion_weights, batch_from_list_or_array, \
-    predict_from_batches, get_one_output_model, split_model
+from src.sds.nn.utils import batch_from_list_or_array, predict_from_batches, get_one_output_model, split_model
 
 def batch_base_inputs(x_train, x_valid, base_batch_size):
         x_train_batches = batch_from_list_or_array(x_train, batch_size=base_batch_size)
@@ -33,37 +30,6 @@ def get_quantile_loss_calculator_from_model(model):
     quantile_loss_calculator = QuantileLossCalculator(quantiles, output_size)
     return quantile_loss_calculator
 
-
-class MetricsCallback(Callback):
-
-    def __init__(self, problem, t0, ref_point, skip_train_metrics=False) -> None:
-        super().__init__()
-        self.problem = problem
-        self.t0 = t0
-        self.data["metrics"] = []
-        self.data["times"] = []
-        self.data["train_metrics"] = []
-        self.ref_point = ref_point
-        self.skip_train_metrics = skip_train_metrics
-
-    def notify(self, algorithm, **kwargs):
-        X = algorithm.pop.get("X")
-        F = problem.eval_individuals(X, 'valid')
-        X_moea_sorted, F_moea_sorted = sort_1st_col(X, F)
-        moea_metrics = metrics_of_pf(F_moea_sorted, ref=self.ref_point)
-        self.data["metrics"].append(moea_metrics)
-        self.data["times"].append(time.time() - t0)
-
-        if not skip_train_metrics:
-            train_metrics = metrics_of_pf(algorithm.pop.get("F"), ref=self.ref_point)
-            self.data["train_metrics"].append(train_metrics)
-
-def optimal_reference_point(problem_size):
-    if problem_size == 'small':
-        return [6.604550218582154, 1.7242103934288027]
-    if problem_size == 'medium':
-        return [78.61612014770509, 16.727188873291016]
-    return [2., 2.]
 
 def get_intermediate_layers(problem_size):
     if problem_size == 'medium':
@@ -99,8 +65,7 @@ def qer(quantile_loss_calculator, quantile_ix):
     return quantile_estimation_risk
 
 
-# %%
-if __name__ == '__main__':
+def run():
     ## --------------- CFG ---------------
     parser = argparse.ArgumentParser(description='Run experiment.')
     parser.add_argument('--start', type=int, dest='start_seed', default=0, help='start running the experiment at the given seed')
@@ -113,7 +78,6 @@ if __name__ == '__main__':
     with open(os.path.join(args.path, "config.yaml"), 'r') as stream:
         config = yaml.safe_load(stream)
 
-    print(config)
     project = 'snp'
     problem_size = config['problem_size']
     combinations = config['combinations']
@@ -150,6 +114,22 @@ if __name__ == '__main__':
         loss_f = quantile_loss_calculator.quantile_loss_per_q_moo_no_normalization
 
     results = []
+
+    with tf.device('/device:GPU:0'):
+        x_base_train, x_base_valid = batch_base_inputs(
+                model_params['datasets']['train']['x'],
+                model_params['datasets']['valid']['x'],
+                sds_cfg['problem']['base_batch_size']
+        )
+        x_train = predict_from_batches(base_model, x_base_train,
+                                        to_numpy=False,
+                                        concat_output=True,
+                                        use_gpu=True)
+        x_valid = predict_from_batches(base_model, x_base_valid,
+                                        to_numpy=False,
+                                        concat_output=True,
+                                        use_gpu=True)
+        
     for weight in combinations:
         print(f"Starting training with sum weight {weight}")
         trainable_model.set_weights(initial_weights)
@@ -164,20 +144,6 @@ if __name__ == '__main__':
         )
 
         with tf.device('/device:GPU:0'):
-            x_base_train, x_base_valid = batch_base_inputs(
-                model_params['datasets']['train']['x'],
-                model_params['datasets']['valid']['x'],
-                sds_cfg['problem']['base_batch_size']
-            )
-            x_train = predict_from_batches(base_model, x_base_train,
-                                            to_numpy=False,
-                                            concat_output=True,
-                                            use_gpu=True)
-            x_valid = predict_from_batches(base_model, x_base_valid,
-                                            to_numpy=False,
-                                            concat_output=True,
-                                            use_gpu=True)
-            #trainable_model.fit()
             res = trainable_model.fit(
                 x=x_train,
                 y=model_params['datasets']['train']['y'],
@@ -195,3 +161,5 @@ if __name__ == '__main__':
         os.path.join(args.path, f'results.z'),
         compress=3)
         
+if __name__ == '__main__':
+    run()

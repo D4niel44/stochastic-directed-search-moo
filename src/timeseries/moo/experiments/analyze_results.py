@@ -4,11 +4,8 @@ import yaml
 
 from src.timeseries.moo.experiments.config import moea_map
 from src.timeseries.utils.util import write_text_file
-from src.timeseries.moo.experiments.utils import get_reference_point, load_results
+from src.timeseries.moo.experiments.util import get_reference_point, load_results, parse_reference_point_arg
 from src.timeseries.moo.experiments.plot import mean_std_table, plot_cd_diagram, plot_evo, plot_median_evo, plot_pareto_front
-
-def parse_reference_point_arg(str):
-    return [float(n) for n in str.split(',')]
 
 # %%
 if __name__ == '__main__':
