@@ -18,6 +18,76 @@ from src.models.attn.nn_funcs import QuantileLossCalculator
 
 from src.sds.nn.utils import batch_from_list_or_array, predict_from_batches, get_one_output_model, split_model
 
+class WeightedSumFineTuning():
+    
+    def __init__(self, sds_cfg, project, problem_size):
+        self.trainable_model_batch_size = sds_cfg['problem']['moo_batch_size']
+        self.quantile_ix = sds_cfg['problem']['quantile_ix'] 
+
+        model_params, results_folder = get_model_and_params(sds_cfg, project)
+        model = get_one_output_model(model_params['model'].model, 'td_quantiles')
+        models = split_model(model, get_intermediate_layers(problem_size), compile=False)
+
+        self.base_model = models['base_model']
+        self.trainable_model = models['trainable_model']
+        self.base_model.compile()
+        self.quantile_loss_calculator = get_quantile_loss_calculator_from_model(model_params['model'])
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=model_params['model'].learning_rate, clipnorm=model_params['model'].max_gradient_norm)
+        self.initial_weights = self.trainable_model.get_weights()
+
+        with tf.device('/device:GPU:0'):
+            x_base_train, x_base_valid = batch_base_inputs(
+                    model_params['datasets']['train']['x'],
+                    model_params['datasets']['valid']['x'],
+                    sds_cfg['problem']['base_batch_size']
+            )
+            self.x_train = predict_from_batches(self.base_model, x_base_train,
+                                                to_numpy=False,
+                                                concat_output=True,
+                                                use_gpu=True)
+            self.x_valid = predict_from_batches(self.base_model, x_base_valid,
+                                                to_numpy=False,
+                                                concat_output=True,
+                                                use_gpu=True)
+        
+        self.y_train = model_params['datasets']['train']['y']
+        self.y_valid = model_params['datasets']['valid']['y']
+    
+    def train(self, weight, epochs=5, normalize_loss=False, initial_weights=None, save_path=None):
+        print(f"Starting training with sum weight {weight}")
+
+        self.trainable_model.set_weights(initial_weights if initial_weights is not None else self.initial_weights)
+
+        if normalize_loss:
+            loss_f = self.quantile_loss_calculator.quantile_loss_per_q_moo
+        else:
+            loss_f = self.quantile_loss_calculator.quantile_loss_per_q_moo_no_normalization
+        loss = loss_function(loss_f, weight, self.quantile_ix)
+
+        self.trainable_model.compile(
+            loss=loss,
+            metrics=[
+                qcr(self.quantile_loss_calculator, self.quantile_ix),
+                qer(self.quantile_loss_calculator, self.quantile_ix),
+            ],
+            optimizer=self.optimizer, 
+        )
+
+        with tf.device('/device:GPU:0'):
+            res = self.trainable_model.fit(
+                x=self.x_train,
+                y=self.y_train,
+                batch_size=self.trainable_model_batch_size, 
+                epochs=epochs,
+                verbose=2,
+                validation_data=(self.x_valid, self.y_valid),
+            )
+        
+        if save_path is not None:
+            self.trainable_model.save(save_path)
+        
+        return res
+
 def batch_base_inputs(x_train, x_valid, base_batch_size):
         x_train_batches = batch_from_list_or_array(x_train, batch_size=base_batch_size)
         x_valid_batches = batch_from_list_or_array(x_valid, batch_size=base_batch_size)
@@ -86,7 +156,6 @@ def run():
     epochs = config['epochs']
     ## ------------------------------------
 
-    sds_cfg['model']['ix'] = get_input_args()['model_ix']
     sds_cfg['model']['ix'] = 5
     sds_cfg['problem']['split_model'] = problem_size
     sds_cfg['problem']['limits'] = None
@@ -95,67 +164,19 @@ def run():
 
     print('Model ix: {}'.format(get_from_dict(sds_cfg, ['model', 'ix'])))
 
-    model_params, results_folder = get_model_and_params(sds_cfg, project)
-    model = get_one_output_model(model_params['model'].model, 'td_quantiles')
-    models = split_model(model, get_intermediate_layers(problem_size), compile=False)
-
-    base_model = models['base_model']
-    trainable_model = models['trainable_model']
-
-    base_model.compile()
-    quantile_loss_calculator = get_quantile_loss_calculator_from_model(model_params['model'])
-    adam = tf.keras.optimizers.Adam(learning_rate=model_params['model'].learning_rate, clipnorm=model_params['model'].max_gradient_norm)
-
-    initial_weights = trainable_model.get_weights()
-
-    if normalize_loss:
-        loss_f = quantile_loss_calculator.quantile_loss_per_q_moo
-    else:
-        loss_f = quantile_loss_calculator.quantile_loss_per_q_moo_no_normalization
+    model = WeightedSumFineTuning(sds_cfg, project, problem_size)
 
     results = []
-
-    with tf.device('/device:GPU:0'):
-        x_base_train, x_base_valid = batch_base_inputs(
-                model_params['datasets']['train']['x'],
-                model_params['datasets']['valid']['x'],
-                sds_cfg['problem']['base_batch_size']
-        )
-        x_train = predict_from_batches(base_model, x_base_train,
-                                        to_numpy=False,
-                                        concat_output=True,
-                                        use_gpu=True)
-        x_valid = predict_from_batches(base_model, x_base_valid,
-                                        to_numpy=False,
-                                        concat_output=True,
-                                        use_gpu=True)
-        
     for weight in combinations:
-        print(f"Starting training with sum weight {weight}")
-        trainable_model.set_weights(initial_weights)
-        loss = loss_function(loss_f, weight, sds_cfg['problem']['quantile_ix'])
-        trainable_model.compile(
-            loss=loss,
-            metrics=[
-                qcr(quantile_loss_calculator, sds_cfg['problem']['quantile_ix']),
-                qer(quantile_loss_calculator, sds_cfg['problem']['quantile_ix']),
-            ],
-            optimizer=adam, 
+        res = model.train(
+            weight,
+            epochs,
+            normalize_loss=normalize_loss,   
+            initial_weights=None,
+            save_path=os.path.join(args.path, f'model_w{weight}.keras'),
         )
-
-        with tf.device('/device:GPU:0'):
-            res = trainable_model.fit(
-                x=x_train,
-                y=model_params['datasets']['train']['y'],
-                batch_size=sds_cfg['problem']['moo_batch_size'], 
-                epochs=epochs,
-                verbose=2,
-                validation_data=(x_valid, model_params['datasets']['valid']['y']),
-            )
-
-            results.append(res.history)
-            trainable_model.save(os.path.join(args.path, f'model_w{weight}.keras'))
-
+        results.append(res.history)
+        
     joblib.dump(
         results,
         os.path.join(args.path, f'results.z'),
