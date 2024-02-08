@@ -4,8 +4,10 @@ import os
 import time
 import copy
 import tensorflow as tf
+import sys
 
 import yaml
+import numpy as np
 import joblib
 from pymoo.core.callback import Callback
 
@@ -13,10 +15,13 @@ from src.timeseries.moo.sds.config import sds_cfg
 from src.timeseries.moo.core.harness import get_model_and_params
 from src.timeseries.moo.sds.utils.bash import get_input_args
 from src.timeseries.moo.sds.utils.util import get_from_dict
+from src.timeseries.moo.experiments.util import load_results, load_config, get_reference_point, get_best_seed_moea, load_result_file
+from src.timeseries.moo.experiments.config import moea_map
+from src.timeseries.utils.moo import sort_1st_col
 
 from src.models.attn.nn_funcs import QuantileLossCalculator
 
-from src.sds.nn.utils import batch_from_list_or_array, predict_from_batches, get_one_output_model, split_model
+from src.sds.nn.utils import batch_from_list_or_array, predict_from_batches, get_one_output_model, split_model, params_conversion_weights, reconstruct_weights
 
 class WeightedSumFineTuning():
     
@@ -52,6 +57,10 @@ class WeightedSumFineTuning():
         
         self.y_train = model_params['datasets']['train']['y']
         self.y_valid = model_params['datasets']['valid']['y']
+
+    def get_initial_weight_params(self):
+        _, params = params_conversion_weights(self.initial_weights)
+        return params
     
     def train(self, weight, epochs=5, normalize_loss=False, initial_weights=None, save_path=None):
         print(f"Starting training with sum weight {weight}")
@@ -135,6 +144,19 @@ def qer(quantile_loss_calculator, quantile_ix):
     return quantile_estimation_risk
 
 
+def get_initial_weights(path, moea):
+    config = load_config(path)
+    _, res_dict = load_results(path, [moea], config['number_runs'], config['problem_size'], parallelize=False)
+
+    ref_point = get_reference_point(res_dict)
+    best_seed = get_best_seed_moea(res_dict[moea], ref_point)
+
+    (sol, *_) = load_result_file(path, moea, config['problem_size'], best_seed)
+
+    X, F = sol.get('X'), sol.get('F')
+    X_sorted, _ = sort_1st_col(X, F)
+    return np.flip(X_sorted, 0)
+    
 def run():
     ## --------------- CFG ---------------
     parser = argparse.ArgumentParser(description='Run experiment.')
@@ -166,13 +188,17 @@ def run():
 
     model = WeightedSumFineTuning(sds_cfg, project, problem_size)
 
+    if config['initial_weight']:
+        initial_X = get_initial_weights(config['initial_weight']['path'], moea_map[config['initial_weight']['moea']])
+        params = model.get_initial_weight_params()
+        initial_weights = [reconstruct_weights(X, params) for i, X in enumerate(initial_X) if i % len(initial_X) // len(combinations) == 0]
     results = []
-    for weight in combinations:
+    for i, weight in enumerate(combinations):
         res = model.train(
             weight,
             epochs,
             normalize_loss=normalize_loss,   
-            initial_weights=None,
+            initial_weights=(initial_weights[i] if config['initial_weight'] else None),
             save_path=os.path.join(args.path, f'model_w{weight}.keras'),
         )
         results.append(res.history)

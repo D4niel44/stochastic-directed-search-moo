@@ -6,14 +6,16 @@ import sys
 
 import joblib
 from tqdm import tqdm
-import time
+import yaml
+
+from src.timeseries.utils.moo import get_hypervolume
 
 def _parallel_load(path, n_repeat, problem_size, m):
     (i, moea) = m
     results = []
     print_warning = False
     for seed in tqdm(range(n_repeat), desc=f'Loading {moea.__name__} results', leave=True, colour='green', position=i, lock_args=None, file=sys.stdout):
-        res = joblib.load(os.path.join(path, f'{moea.__name__}_{problem_size}_results_{seed}.z'))
+        res = load_result_file(path, moea, problem_size, seed)
         if len(res) == 3: #results without training metrics
             # (sol, times, metrics) - sol is discarded
             results.append(res[1:])
@@ -29,14 +31,20 @@ def _parallel_load(path, n_repeat, problem_size, m):
             print_warning = True
             res[2][-1]['F'] = res[0].get('F')
     return moea, results, print_warning
+
+def load_result_file(path, moea, problem_size, seed):
+    return joblib.load(os.path.join(path, f'{moea.__name__}_{problem_size}_results_{seed}.z'))
  
-def load_results(path, moeas, n_repeat, problem_size):
+def load_results(path, moeas, n_repeat, problem_size, parallelize = True):
     res_dict = {}
     times_dict = {}
     print_warning = False
-    tqdm.set_lock(RLock())
-    p = Pool(initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
-    tasks = p.map(partial(_parallel_load, path, n_repeat, problem_size), enumerate(moeas))
+    if parallelize:
+        tqdm.set_lock(RLock())
+        p = Pool(initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
+        tasks = p.map(partial(_parallel_load, path, n_repeat, problem_size), enumerate(moeas))
+    else:
+        tasks = map(partial(_parallel_load, path, n_repeat, problem_size), enumerate(moeas))
     for moea, results, warning in tasks:
         times_dict[moea] = [r[0] for r in results]
         res_dict[moea] = [r[1] for r in results]
@@ -57,3 +65,24 @@ def get_reference_point(res_dict):
 
 def parse_reference_point_arg(str):
     return [float(n) for n in str.split(',')]
+
+
+def load_config(path):
+    with open(os.path.join(path, "config.yaml"), 'r') as stream:
+        config = yaml.safe_load(stream)
+    return config
+
+
+def get_best_seed_moea(moea_results, ref_point):
+    best_idx = 0
+    best_hv = 0
+    for i, r in enumerate(moea_results):
+        hv = get_hypervolume(r[-1]['F'], ref_point)
+        if hv > best_hv:
+            best_idx = i
+            hv = best_hv
+    return best_idx
+
+def get_best_f_moea(moea_results, ref_point):
+    best_idx = get_best_seed_moea(moea_results, ref_point)
+    return moea_results[best_idx][-1]['F']

@@ -12,18 +12,9 @@ from src.timeseries.moo.experiments.config import moea_map
 from src.timeseries.utils.util import write_text_file 
 from src.timeseries.moo.experiments.util import get_reference_point, load_results, parse_reference_point_arg
 from src.timeseries.utils.moo import sort_arr_1st_col
-from src.timeseries.utils.moo import get_hypervolume
 from src.timeseries.moo.core.harness import plot_2D_pf
-
-def get_best_f_moea(moea_results, ref_point):
-    best_idx = 0
-    best_hv = 0
-    for i, r in enumerate(moea_results):
-        hv = get_hypervolume(r[-1]['F'], ref_point)
-        if hv > best_hv:
-            best_idx = i
-            hv = best_hv
-    return moea_results[best_idx][-1]['F']
+from src.timeseries.moo.experiments.util import load_config
+from src.timeseries.moo.experiments.util import get_best_f_moea
 
 def get_f_from_gd_res(gd_res):
     f_res = []
@@ -43,12 +34,6 @@ def preprocess_gd(path):
     gd_res = joblib.load(os.path.join(path, 'results.z'))
     return get_f_from_gd_res(gd_res)
     
-def load_config(path):
-    with open(os.path.join(path, "config.yaml"), 'r') as stream:
-        config = yaml.safe_load(stream)
-    return config
-    
-# %%
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Compare the Pareto front from multiple algorithms.')
     parser.add_argument('path', help='path to the config of the experiment')
