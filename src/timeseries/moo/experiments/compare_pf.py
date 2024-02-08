@@ -82,4 +82,4 @@ if __name__ == '__main__':
                 save_pdf=False,
                 save_png=False,
                 title=f'Pareto front - {title}',
-                img_path=os.path.join(path, 'pf'))
+                img_path=os.path.join(args.path, 'pf'))
