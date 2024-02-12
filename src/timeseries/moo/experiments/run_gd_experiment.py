@@ -188,7 +188,7 @@ def run():
 
     model = WeightedSumFineTuning(sds_cfg, project, problem_size)
 
-    if config['initial_weight']:
+    if 'initial_weight' in config:
         initial_X = get_initial_weights(config['initial_weight']['path'], moea_map[config['initial_weight']['moea']])
         params = model.get_initial_weight_params()
         initial_weights = [reconstruct_weights(X, params) for i, X in enumerate(initial_X) if i % len(initial_X) // len(combinations) == 0]
@@ -198,7 +198,7 @@ def run():
             weight,
             epochs,
             normalize_loss=normalize_loss,   
-            initial_weights=(initial_weights[i] if config['initial_weight'] else None),
+            initial_weights=(initial_weights[i] if 'initial_weight' in config else None),
             save_path=os.path.join(args.path, f'model_w{weight}.keras'),
         )
         results.append(res.history)
