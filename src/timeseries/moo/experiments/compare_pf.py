@@ -81,5 +81,6 @@ if __name__ == '__main__':
                 size=(1000, 700),
                 save_pdf=False,
                 save_png=False,
+                f_mode=config['mode'] if 'mode' in config else None,
                 title=f'Pareto front - {title}',
                 img_path=os.path.join(args.path, title, 'pf'))
