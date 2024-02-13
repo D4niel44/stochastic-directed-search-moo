@@ -349,6 +349,7 @@ def plot_2D_points_traces_total(points_traces,
                                                  i] else None,
                                              ),
                                  showlegend=show_legends[i] if show_legends is not None else True,
+                                 legendgroup=str(i),
                                  name=None if names is None else names[i]), row=1, col=1)
 
         fig.add_trace(go.Scatter(x=points[:, 0],
@@ -361,6 +362,7 @@ def plot_2D_points_traces_total(points_traces,
                                                                                      color='black') if outlines[
                                                  i] else None,
                                              ),
+                                 legendgroup=str(i),
                                  showlegend=False,
                                  name=None if names is None else names[i] + '_total'), row=1, col=2)
 
