@@ -18,6 +18,7 @@ from src.timeseries.moo.sds.utils.util import get_from_dict
 from src.timeseries.moo.experiments.util import load_results, load_config, get_reference_point, get_best_seed_moea, load_result_file
 from src.timeseries.moo.experiments.config import moea_map
 from src.timeseries.utils.moo import sort_1st_col
+from src.timeseries.utils.util import write_text_file
 
 from src.models.attn.nn_funcs import QuantileLossCalculator
 
@@ -156,6 +157,10 @@ def get_initial_weights(path, moea):
     X, F = sol.get('X'), sol.get('F')
     X_sorted, _ = sort_1st_col(X, F)
     return np.flip(X_sorted, 0)
+
+def nonlinear_weights_selection(lambdas, k, n):
+    return [(l / k) ** n for l in lambdas]
+    
     
 def run():
     ## --------------- CFG ---------------
@@ -192,8 +197,16 @@ def run():
         initial_X = get_initial_weights(config['initial_weight']['path'], moea_map[config['initial_weight']['moea']])
         params = model.get_initial_weight_params()
         initial_weights = [reconstruct_weights(X, params) for i, X in enumerate(initial_X) if i % len(initial_X) // len(combinations) == 0]
+    if 'nonlinear_weight_params' in config:
+        k = config['nonlinear_weight_params']['k']
+        n = config['nonlinear_weight_params']['n']
+        weights = nonlinear_weights_selection(combinations, k, n)
+    else:
+        weights = combinations
+    write_text_file(os.path.join(args.path, 'ws_weights'), str(weights))
+
     results = []
-    for i, weight in enumerate(combinations):
+    for i, weight in enumerate(weights):
         res = model.train(
             weight,
             epochs,
