@@ -63,24 +63,36 @@ class WeightedSumFineTuning():
         _, params = params_conversion_weights(self.initial_weights)
         return params
     
-    def train(self, weight, epochs=5, normalize_loss=False, initial_weights=None, save_path=None):
+    def train(self, weight, epochs=5, normalize_loss=None, standarize_loss=False, initial_weights=None, save_path=None, metrics=[]):
         print(f"Starting training with sum weight {weight}")
 
         self.trainable_model.set_weights(initial_weights if initial_weights is not None else self.initial_weights)
 
-        if normalize_loss:
+        if standarize_loss:
             loss_f = self.quantile_loss_calculator.quantile_loss_per_q_moo
         else:
             loss_f = self.quantile_loss_calculator.quantile_loss_per_q_moo_no_normalization
-        loss = loss_function(loss_f, weight, self.quantile_ix)
+        
+        if normalize_loss:
+            loss = loss_function(
+                loss_f,
+                weight,
+                self.quantile_ix,
+                normalizers=[
+                    normalizer(*normalize_loss[0]),
+                    normalizer(*normalize_loss[1]),
+                ],
+            )
+        else:
+            loss = loss_function(loss_f, weight, self.quantile_ix)
 
         self.trainable_model.compile(
             loss=loss,
             metrics=[
                 qcr(self.quantile_loss_calculator, self.quantile_ix),
                 qer(self.quantile_loss_calculator, self.quantile_ix),
-            ],
-            optimizer=self.optimizer, 
+            ] + metrics,
+            optimizer=self.optimizer,
         )
 
         with tf.device('/device:GPU:0'):
@@ -122,11 +134,22 @@ def get_intermediate_layers(problem_size):
         raise NotImplementedError
     return intermediate_layers
 
-def loss_function(loss_func, weight, quantile_ix):
+def normalizer(min, max):
+    def func(x):
+        return min_max_scale(x, min, max)
+    return func
+
+def min_max_scale(x, min, max):
+    return (x - min) / (max - min)
+
+def no_normalization(x):
+    return x
+
+def loss_function(loss_func, weight, quantile_ix, normalizers = [no_normalization, no_normalization]):
     def loss(y, y_pred):
         loss_per_quantile = loss_func(y, y_pred)
         loss_per_func = loss_per_quantile[quantile_ix]
-        ret = weight * loss_per_func[0] + (1 - weight) * loss_per_func[1]
+        ret = weight * normalizers[0](loss_per_func[0]) + (1 - weight) * normalizers[1](loss_per_func[1])
         return ret
     return loss
 
@@ -144,6 +167,19 @@ def qer(quantile_loss_calculator, quantile_ix):
         return loss_per_func[1]
     return quantile_estimation_risk
 
+def qcl(quantile_loss_calculator, quantile_ix):
+    def quantile_coverage_loss(y, y_pred):
+        loss_per_quantile = quantile_loss_calculator.quantile_loss_per_q_moo_no_normalization(y, y_pred)
+        loss_per_func = loss_per_quantile[quantile_ix]
+        return loss_per_func[0]
+    return quantile_coverage_loss
+
+def qel(quantile_loss_calculator, quantile_ix):
+    def quantile_estimation_loss(y, y_pred):
+        loss_per_quantile = quantile_loss_calculator.quantile_loss_per_q_moo_no_normalization(y, y_pred)
+        loss_per_func = loss_per_quantile[quantile_ix]
+        return loss_per_func[1]
+    return quantile_estimation_loss
 
 def get_initial_weights(path, moea):
     config = load_config(path)
@@ -197,6 +233,7 @@ def run():
         initial_X = get_initial_weights(config['initial_weight']['path'], moea_map[config['initial_weight']['moea']])
         params = model.get_initial_weight_params()
         initial_weights = [reconstruct_weights(X, params) for i, X in enumerate(initial_X) if i % len(initial_X) // len(combinations) == 0]
+
     if 'nonlinear_weight_params' in config:
         k = config['nonlinear_weight_params']['k']
         n = config['nonlinear_weight_params']['n']
@@ -205,15 +242,53 @@ def run():
         weights = combinations
     write_text_file(os.path.join(args.path, 'ws_weights'), str(weights))
 
+    if normalize_loss:
+        res0 = model.train(
+            0.0,
+            epochs,
+            normalize_loss=None,   
+            initial_weights=(initial_weights[i] if 'initial_weight' in config else None),
+            save_path=os.path.join(args.path, f'model_w{0.0}.keras'),
+            metrics=[
+                qcl(model.quantile_loss_calculator, model.quantile_ix),
+                qel(model.quantile_loss_calculator, model.quantile_ix),
+            ],
+        )
+        res1 = model.train(
+            1.0,
+            epochs,
+            normalize_loss=None,   
+            initial_weights=(initial_weights[i] if 'initial_weight' in config else None),
+            save_path=os.path.join(args.path, f'model_w{1.0}.keras'),
+            metrics=[
+                qcl(model.quantile_loss_calculator, model.quantile_ix),
+                qel(model.quantile_loss_calculator, model.quantile_ix),
+            ],
+        )
+        min_f1 = res1.history['quantile_coverage_loss'][-1]
+        max_f1 = res0.history['quantile_coverage_loss'][-1]
+        min_f2 = res0.history['quantile_estimation_loss'][-1]
+        max_f2 = res1.history['quantile_estimation_loss'][-1]
+        limits = [(min_f1, max_f1), (min_f2, max_f2)]
+        print(f'Normalizer limits {limits}')
+        write_text_file(os.path.join(args.path, 'normalizer_limits'), str(limits))
+    else:
+        limits = None
+
     results = []
     for i, weight in enumerate(weights):
-        res = model.train(
-            weight,
-            epochs,
-            normalize_loss=normalize_loss,   
-            initial_weights=(initial_weights[i] if 'initial_weight' in config else None),
-            save_path=os.path.join(args.path, f'model_w{weight}.keras'),
-        )
+        if normalize_loss and weight == 0.0:
+            res = res0
+        if normalize_loss and weight == 1.0:
+            res = res1
+        else:
+            res = model.train(
+                weight,
+                epochs,
+                normalize_loss=limits,   
+                initial_weights=(initial_weights[i] if 'initial_weight' in config else None),
+                save_path=os.path.join(args.path, f'model_w{weight}.keras'),
+            )
         results.append(res.history)
         
     joblib.dump(
