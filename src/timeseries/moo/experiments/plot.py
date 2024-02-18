@@ -11,7 +11,7 @@ from src.timeseries.utils.util import latex_table, write_text_file
 def plot_evo(res_dict, path, moeas, n_repeat, ref, n_gen, recalculate_hv=True, file_prefix=''):
     for seed in range(n_repeat):
         fig = plt.figure()
-        fig.supxlabel("Generaciones")
+        fig.supxlabel("Generations")
         fig.supylabel("HV")
 
         for moea in moeas:
@@ -19,7 +19,7 @@ def plot_evo(res_dict, path, moeas, n_repeat, ref, n_gen, recalculate_hv=True, f
 
             plt.plot([i for i in range(1, n_gen+1)], [get_hypervolume(res[i]['F'], ref) if recalculate_hv else res[i]['hv'] for i in range(n_gen)], label = moea.__name__)
 
-        plt.title(f'Evolución semilla {seed}')
+        plt.title(f'Evolution - seed {seed}')
         plt.legend()
         plt.savefig(os.path.join(path, f'{file_prefix}seed_{seed}_evo_graph.png'))
         plt.close(fig)
@@ -32,14 +32,14 @@ def get_median_run(results):
 
 def plot_median_evo(res_dict, path, moeas, ref, n_gen, recalculate_hv=True, file_prefix=''):
     fig = plt.figure()
-    fig.supxlabel("Generaciones")
+    fig.supxlabel("Generations")
     fig.supylabel("HV")
     for moea in moeas:
         moea_results = res_dict[moea]
         median = get_median_run(moea_results)
         plt.plot([i for i in range(1, n_gen+1)], [get_hypervolume(median[i]['F'], ref) if recalculate_hv else median[i]['hv'] for i in range(n_gen)], label = moea.__name__)
 
-    plt.title('Evolución Mediana')
+    plt.title('Median evolution')
     plt.legend()
     plt.savefig(os.path.join(path, f'{file_prefix}median_exec_graph.png'))
     plt.close(fig)
@@ -48,7 +48,7 @@ def plot_median_evo(res_dict, path, moeas, ref, n_gen, recalculate_hv=True, file
 def plot_pareto_front(res_dict, path, moeas, n_repeat, n_gen, file_prefix=''):
     for seed in range(n_repeat):
         fig, axs = plt.subplots(2, 2, sharex=True, sharey=True)
-        fig.suptitle(f'Pareto front - Semilla {seed}')
+        fig.suptitle(f'Pareto front')
         axs = axs.flat
         for i, moea in enumerate(moeas):
             sol = res_dict[moea]
