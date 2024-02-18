@@ -38,7 +38,7 @@ if __name__ == '__main__':
 
     times_dict, res_dict = load_results(path, moeas, n_repeat, problem_size)
 
-    ref_point = args.ref_point if args.ref_point is not None else get_reference_point(res_dict, moeas, n_repeat, n_gen)
+    ref_point = args.ref_point if args.ref_point is not None else get_reference_point(res_dict)
     recalculate_hv = not args.default_hv
 
     os.makedirs(output_path, exist_ok=True) 
