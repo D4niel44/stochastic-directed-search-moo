@@ -86,3 +86,7 @@ def get_best_seed_moea(moea_results, ref_point):
 def get_best_f_moea(moea_results, ref_point):
     best_idx = get_best_seed_moea(moea_results, ref_point)
     return moea_results[best_idx][-1]['F']
+
+
+def nonlinear_weights_selection(lambdas, k, n):
+    return [(l / k) ** n for l in lambdas]

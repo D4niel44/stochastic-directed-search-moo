@@ -1,20 +1,17 @@
 # %%
 import argparse
 import os
-import time
 import copy
 import tensorflow as tf
-import sys
 
 import yaml
 import numpy as np
 import joblib
-from pymoo.core.callback import Callback
 
 from src.timeseries.moo.sds.config import sds_cfg
 from src.timeseries.moo.core.harness import get_model_and_params
-from src.timeseries.moo.sds.utils.bash import get_input_args
 from src.timeseries.moo.sds.utils.util import get_from_dict
+from src.timeseries.moo.experiments.util import nonlinear_weights_selection
 from src.timeseries.moo.experiments.util import load_results, load_config, get_reference_point, get_best_seed_moea, load_result_file
 from src.timeseries.moo.experiments.config import moea_map
 from src.timeseries.utils.moo import sort_1st_col
@@ -194,10 +191,6 @@ def get_initial_weights(path, moea):
     X_sorted, _ = sort_1st_col(X, F)
     return np.flip(X_sorted, 0)
 
-def nonlinear_weights_selection(lambdas, k, n):
-    return [(l / k) ** n for l in lambdas]
-    
-    
 def run():
     ## --------------- CFG ---------------
     parser = argparse.ArgumentParser(description='Run experiment.')
