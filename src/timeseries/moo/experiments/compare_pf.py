@@ -60,7 +60,7 @@ if __name__ == '__main__':
             else:
                 ref_point = get_reference_point(res_dict)
 
-            write_text_file(os.path.join(path, f'reference_point_group{i}'), str(ref_point))
+            write_text_file(os.path.join(args.path, f'reference_point_group{i}'), str(ref_point))
 
             for name in moea_group['names']:
                 fronts.append(get_best_f_moea(res_dict[moea_map[name]], ref_point))
