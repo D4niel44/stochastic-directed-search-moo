@@ -2,20 +2,19 @@
 import argparse
 import os
 import time
+import sys
 
 import yaml
 import joblib
-from pymoo.algorithms.moo.nsga2 import NSGA2
-from pymoo.algorithms.moo.nsga3 import NSGA3 
-from pymoo.algorithms.moo.moead import MOEAD 
-from pymoo.algorithms.moo.sms import SMSEMOA 
 from pymoo.core.callback import Callback
+import numpy as np
 
 from src.timeseries.moo.sds.config import sds_cfg
 from src.timeseries.moo.core.harness import get_model_and_params, get_ts_problem
 from src.timeseries.moo.sds.utils.bash import get_input_args
 from src.timeseries.moo.sds.utils.indicators import metrics_of_pf
 from src.timeseries.moo.sds.utils.util import get_from_dict
+from src.timeseries.moo.experiments.util import nonlinear_weights_selection
 from src.timeseries.utils.moo import sort_1st_col
 from pymoo.operators.sampling.rnd import FloatRandomSampling
 from pymoo.operators.mutation.pm import PolynomialMutation
@@ -57,6 +56,14 @@ def optimal_reference_point(problem_size):
         return [78.61612014770509, 16.727188873291016]
     return [2., 2.]
 
+def reference_directions(n_objectives, pop_size, ref_dirs_func = lambda x: x):
+    ref_dirs = get_reference_directions("energy", problem.n_obj, pop_size)
+    return ref_dirs_func(ref_dirs)
+
+def nonlinear_ref_dirs(k, n):
+    def f(ref_dirs):
+        return np.array([[x, 1-x] for x in nonlinear_weights_selection(ref_dirs[:, 0], k, n)])
+    return f
 # %%
 if __name__ == '__main__':
     ## --------------- CFG ---------------
@@ -79,6 +86,7 @@ if __name__ == '__main__':
     pop_size = config['population_size']
     n_gen = config['generations']
     skip_train_metrics = config['skip_train_metrics']
+    use_non_linear_reference_directions = 'nonlinear_reference_directions' in config
     ## ------------------------------------
 
     sds_cfg['model']['ix'] = get_input_args()['model_ix']
@@ -93,6 +101,12 @@ if __name__ == '__main__':
     model_params, results_folder = get_model_and_params(sds_cfg, project)
     problem = get_ts_problem(sds_cfg, model_params, test_ss=False)
 
+    if use_non_linear_reference_directions:
+        k = config['nonlinear_reference_directions']['k']
+        n = config['nonlinear_reference_directions']['n']
+        ref_dirs = reference_directions(problem.n_obj, pop_size, nonlinear_ref_dirs(k, n))
+    else:
+        ref_dirs = reference_directions(problem.n_obj, pop_size)
 
     # %% Solve N times with MOEA (take measurements along generations)
     for seed in range(args.start_seed, n_repeat):
@@ -103,7 +117,7 @@ if __name__ == '__main__':
                 problem.constraints_limits = None
                 algorithm = moea(
                     n_offsprings=pop_size,
-                    ref_dirs=get_reference_directions("energy", problem.n_obj, pop_size),
+                    ref_dirs=ref_dirs,
                     sampling=FloatRandomSampling(),
                     crossover=SBX(prob=0.9, eta=15),
                     mutation=PolynomialMutation(eta=20),
@@ -112,7 +126,7 @@ if __name__ == '__main__':
                 algorithm = moea(
                     pop_size=pop_size,
                     n_offsprings=pop_size,
-                    ref_dirs=get_reference_directions("energy", problem.n_obj, pop_size),
+                    ref_dirs=ref_dirs,
                     sampling=FloatRandomSampling(),
                     crossover=SBX(prob=0.9, eta=15),
                     mutation=PolynomialMutation(eta=20),
