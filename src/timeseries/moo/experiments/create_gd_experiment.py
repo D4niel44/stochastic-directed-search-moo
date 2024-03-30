@@ -21,7 +21,7 @@ if __name__ == '__main__':
                         dest='moea',
                         help=f'MOEA to use to init the experiment weights (supported moeas are: {[m.__name__ for m in supported_moeas]})',)
     parser.add_argument('--initial_weight_path', default=None, help='path to load the moea from') 
-    parser.add_argument('-n', '--number_combinations', choices=[5, 10, 20, 50, 100], type=int, dest='number_combinations', required=True, help='number of different combination of weigth for the sum of QCR and QER')
+    parser.add_argument('-n', '--number_combinations', choices=[5, 10, 20, 50, 99, 100], type=int, dest='number_combinations', required=True, help='number of different combination of weigth for the sum of QCR and QER')
     parser.add_argument('--epochs', type=int, dest='number_epochs', default=5, help='number of epochs to train')
     parser.add_argument('--skip_train_metrics', action='store_true', help="don't store metrics each generation using the train dataset (only the validation dataset will be used)")
     parser.add_argument('--normalize_loss', action='store_true', help="use normalized loss during training")

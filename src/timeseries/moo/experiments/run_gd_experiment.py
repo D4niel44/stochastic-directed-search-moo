@@ -194,8 +194,8 @@ def get_initial_weights(path, moea):
 def run():
     ## --------------- CFG ---------------
     parser = argparse.ArgumentParser(description='Run experiment.')
-    parser.add_argument('--start', type=int, dest='start_seed', default=0, help='start running the experiment at the given seed')
-    parser.add_argument('--end', type=int, dest='end_seed', default=None, help='end running the experiment before the given seed (exclusive)')
+    parser.add_argument('--start', type=int, dest='start', default=0, help='start running the experiment at the given seed')
+    parser.add_argument('--end', type=int, dest='end', default=None, help='end running the experiment before the given seed (exclusive)')
     parser.add_argument('path', help='path to store the experiment folder')
 
     args = parser.parse_args()
@@ -210,6 +210,8 @@ def run():
     skip_train_metrics = config['skip_train_metrics']
     normalize_loss = config['normalize_loss']
     epochs = config['epochs']
+    start = args.start
+    end = args.end
     ## ------------------------------------
 
     sds_cfg['model']['ix'] = 5
@@ -234,6 +236,9 @@ def run():
     else:
         weights = combinations
     write_text_file(os.path.join(args.path, 'ws_weights'), str(weights))
+    
+    if not end:
+        end = len(weights)
 
     if normalize_loss:
         res0 = model.train(
@@ -269,7 +274,7 @@ def run():
         limits = None
 
     results = []
-    for i, weight in enumerate(weights):
+    for i, weight in enumerate(weights[start:end]):
         if normalize_loss and weight == 0.0:
             res = res0
         if normalize_loss and weight == 1.0:
@@ -280,14 +285,20 @@ def run():
                 epochs,
                 normalize_loss=limits,   
                 initial_weights=(initial_weights[i] if 'initial_weight' in config else None),
-                save_path=os.path.join(args.path, f'model_w{weight}.keras'),
+                save_path=os.path.join(args.path, f'model_w{start+i}.keras'),
             )
         results.append(res.history)
         
-    joblib.dump(
-        results,
-        os.path.join(args.path, f'results.z'),
-        compress=3)
+    if (end - start) < len(weights): 
+        joblib.dump(
+            results,
+            os.path.join(args.path, f'results_{start}_{end}.z'),
+            compress=3)
+    else:
+        joblib.dump(
+            results,
+            os.path.join(args.path, f'results.z'),
+            compress=3)
         
 if __name__ == '__main__':
     run()

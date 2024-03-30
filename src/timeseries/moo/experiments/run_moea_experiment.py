@@ -8,6 +8,8 @@ import yaml
 import joblib
 from pymoo.core.callback import Callback
 import numpy as np
+import tensorflow as tf
+from tqdm import trange
 
 from src.timeseries.moo.sds.config import sds_cfg
 from src.timeseries.moo.core.harness import get_model_and_params, get_ts_problem
@@ -24,6 +26,7 @@ from pymoo.termination import get_termination
 from pymoo.optimize import minimize
 
 from src.timeseries.moo.experiments.config import moea_map
+from src.sds.nn.utils import params_conversion_weights
 
 class MetricsCallback(Callback):
 
@@ -64,6 +67,16 @@ def nonlinear_ref_dirs(k, n):
     def f(ref_dirs):
         return np.array([[x, 1-x] for x in nonlinear_weights_selection(ref_dirs[:, 0], k, n)])
     return f
+
+def get_initial_population(pop_size, path_pop):
+    pop = []
+    for i in trange(pop_size, desc='Loading initial weights'):
+        model = tf.keras.models.load_model(os.path.join(path_pop, f'model_w{i}.keras'), compile=False)
+        ind, _ = params_conversion_weights(model.get_weights())
+        pop.append(ind)
+    return np.squeeze(np.array(pop))
+        
+
 # %%
 if __name__ == '__main__':
     ## --------------- CFG ---------------
@@ -108,6 +121,14 @@ if __name__ == '__main__':
     else:
         ref_dirs = reference_directions(problem.n_obj, pop_size)
 
+    if 'initial_population' in config:
+        path_pop = config['initial_population']
+        initial_population = get_initial_population(pop_size, path_pop)
+        #for iy, ix in np.ndindex(initial_population.shape):
+        #    if initial_population[iy, ix] < 0:
+        #        print(initial_population[iy, ix], iy, ix)
+        #sys.exit(1)
+
     # %% Solve N times with MOEA (take measurements along generations)
     for seed in range(args.start_seed, n_repeat):
         for moea in moeas:
@@ -118,7 +139,7 @@ if __name__ == '__main__':
                 algorithm = moea(
                     n_offsprings=pop_size,
                     ref_dirs=ref_dirs,
-                    sampling=FloatRandomSampling(),
+                    sampling=initial_population if 'initial_population' in config else FloatRandomSampling(),
                     crossover=SBX(prob=0.9, eta=15),
                     mutation=PolynomialMutation(eta=20),
                 )
@@ -127,7 +148,7 @@ if __name__ == '__main__':
                     pop_size=pop_size,
                     n_offsprings=pop_size,
                     ref_dirs=ref_dirs,
-                    sampling=FloatRandomSampling(),
+                    sampling=initial_population if 'initial_population' in config else FloatRandomSampling(),
                     crossover=SBX(prob=0.9, eta=15),
                     mutation=PolynomialMutation(eta=20),
                     eliminate_duplicates=True
