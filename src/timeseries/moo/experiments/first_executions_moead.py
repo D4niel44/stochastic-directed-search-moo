@@ -13,25 +13,15 @@ from src.timeseries.utils.moo import get_hypervolume
 import numpy as np
 import matplotlib.pyplot as plt
 
-from timeseries.moo.experiments.config import moea_map
+from src.timeseries.moo.experiments.config import moea_map
 from src.timeseries.utils.util import write_text_file, latex_table
 from src.timeseries.utils.critical_difference import draw_cd_diagram
-
-def load_results(path, moeas, n_repeat):
-    res_dict = {}
-    times_dict = {}
-    sol_dict = {}
-    for moea in moeas:
-        results = [joblib.load(f'{path}{moea.__name__}_{problem_size}_results_{seed}.z') for seed in range(n_repeat)]
-        sol_dict[moea] = [r[0] for r in results]
-        times_dict[moea] = [r[1] for r in results]
-        res_dict[moea] = [r[2] for r in results]
-    return sol_dict, times_dict, res_dict
+from src.timeseries.moo.experiments.util import get_reference_point, load_results, parse_reference_point_arg
 
 def graph_pareto_front(res_dict, path, moeas, n_repeat, ref_point):
     for seed in range(n_repeat):
         for i, moea in enumerate(moeas):
-            for gen in range(10):
+            for gen in range(5):
                 fig = plt.figure()
                 sol = res_dict[moea]
                 F = sol[seed][gen]['F']
@@ -68,14 +58,14 @@ if __name__ == '__main__':
 
     project = 'snp'
     problem_size = config['problem_size']
-    moeas = [moea_map['MOEAD'], moea_map['NSGA2']]
+    moeas = [moea_map['MOEAD'], moea_map['NSGA2'], moea_map['NSGA3'], moea_map['SMSEMOA']]
     n_repeat = args.end_seed if args.end_seed is not None else config['number_runs']
     pop_size = config['population_size']
     n_gen = config['generations']
     path = args.path
     ## ------------------------------------
 
-    sol_dict, times_dict, res_dict = load_results(path, moeas, n_repeat)
+    _, res_dict = load_results(path, moeas, n_repeat, problem_size)
     ref_point = [72.07351531982422, 12.603998470306397]
 
     graph_pareto_front(res_dict, path, moeas, n_repeat, ref_point)

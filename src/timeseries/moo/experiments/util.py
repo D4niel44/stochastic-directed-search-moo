@@ -16,20 +16,26 @@ def _parallel_load(path, n_repeat, problem_size, m):
     print_warning = False
     for seed in tqdm(range(n_repeat), desc=f'Loading {moea.__name__} results', leave=True, colour='green', position=i, lock_args=None, file=sys.stdout):
         res = load_result_file(path, moea, problem_size, seed)
-        if len(res) == 3: #results without training metrics
-            # (sol, times, metrics) - sol is discarded
-            results.append(res[1:])
-        elif len(res) == 4: #results with training metrics
-            # (sol, times, metrics, train_metrics) - sol and train_metrics are discarded
-            results.append(res[1:3])
+        # Old results are saved in tuple
+        if type(res) is tuple:
+            if len(res) == 3: #results without training metrics
+                # (sol, times, metrics) - sol is discarded
+                results.append(res[1:])
+            elif len(res) == 4: #results with training metrics
+                # (sol, times, metrics, train_metrics) - sol and train_metrics are discarded
+                results.append(res[1:3])
+            else:
+                raise AttributeError("unsuported result length")
+            if 'F' not in res[2][-1]:
+                # For backwards compatibility with older experiments that didn't save F per generation.
+                # Add the last generation F to the metrics, and warn that this result does not support F per generation.
+                # TODO: Evaluate X on validation dataset in order to get F.
+                print_warning = True
+                res[2][-1]['F'] = res[0].get('F')
         else:
-            raise AttributeError("unsuported result length")
-        if 'F' not in res[2][-1]:
-            # For backwards compatibility with older experiments that didn't save F per generation.
-            # Add the last generation F to the metrics, and warn that this result does not support F per generation.
-            # TODO: Evaluate X on validation dataset in order to get F.
-            print_warning = True
-            res[2][-1]['F'] = res[0].get('F')
+            # clear res.opt to save memory
+            res.opt = None
+            results.append(res)
     return moea, results, print_warning
 
 def load_result_file(path, moea, problem_size, seed):
@@ -46,8 +52,12 @@ def load_results(path, moeas, n_repeat, problem_size, parallelize = True):
     else:
         tasks = map(partial(_parallel_load, path, n_repeat, problem_size), enumerate(moeas))
     for moea, results, warning in tasks:
-        times_dict[moea] = [r[0] for r in results]
-        res_dict[moea] = [r[1] for r in results]
+        if type(results[0]) is tuple:
+            times_dict[moea] = [r[0] for r in results]
+            res_dict[moea] = [r[1] for r in results]
+        else:
+            times_dict[moea] = [r.times for r in results]
+            res_dict[moea] = [r.metrics for r in results]
         print_warning = print_warning | warning
     if print_warning:
         print(f'WARNING: The results in path {path} do not support validation F per generation')
