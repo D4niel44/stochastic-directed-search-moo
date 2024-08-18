@@ -3,10 +3,11 @@ from keras.utils.layer_utils import count_params
 import tensorflow as tf
 import numpy as np
 from tabulate import tabulate
+import random
 
 from src.sds.core.problem import ContinuationProblem
 from src.sds.nn.utils import reconstruct_weights, params_conversion_weights, batch_from_list_or_array, \
-    predict_from_batches, get_one_output_model, split_model
+    predict_from_batches, get_one_output_model, split_model, select_batch_sample
 
 
 class NNProblem(ContinuationProblem):
@@ -27,7 +28,8 @@ class NNProblem(ContinuationProblem):
                  x_tol_for_hash=None,
                  constraints_limits=None,
                  base_batch_size=None,
-                 moo_batch_size=None):
+                 moo_batch_size=None,
+                 mini_batch_size=None):
 
         self.use_gpu = use_gpu
         self.base_batch_size = base_batch_size
@@ -59,6 +61,7 @@ class NNProblem(ContinuationProblem):
         self.train_batch_ix = 0
         self.valid_batch_ix = 0
         self.test_batch_ix = 0
+        self.mini_batch_size = mini_batch_size
 
         self.initialize()
         super().__init__(n_var=self.n_var,
@@ -187,8 +190,17 @@ class NNProblem(ContinuationProblem):
             if layer.name in weights_dict:
                 layer.set_weights(weights_dict[layer.name])
 
-    def eval_train(self, individual):
-        return self.eval(individual, self.moo_model_input_train, self.y_train)
+    def eval_train(self, individual, eval_all=False):
+        if not self.mini_batch_size or eval_all:
+            return self.eval(individual, self.moo_model_input_train, self.y_train)
+        else:
+            sample_idx = random.sample(
+                range(len(self.moo_model_input_train)), 
+                k=self.mini_batch_size
+            )
+            X_samples = select_batch_sample(self.moo_model_input_train, sample_idx)
+            Y_samples = np.concatenate(select_batch_sample(self.y_train_batches, sample_idx))
+            return self.eval(individual, X_samples, Y_samples)
 
     def eval_valid(self, individual):
         if self.moo_model_input_valid is not None:
@@ -202,9 +214,9 @@ class NNProblem(ContinuationProblem):
         else:
             raise ValueError('x_test/y_test not provided')
 
-    def eval_individuals(self, individuals, subset='train'):
+    def eval_individuals(self, individuals, subset='train', eval_all=False):
         if subset == 'train':
-            return np.array([self.eval_train(ind) for ind in individuals])
+            return np.array([self.eval_train(ind, eval_all) for ind in individuals])
         elif subset == 'valid':
             return np.array([self.eval_valid(ind) for ind in individuals]) if self.x_valid is not None else None
         elif subset == 'test':
@@ -223,6 +235,7 @@ class NNProblem(ContinuationProblem):
         return np.array(losses)
 
     def _get_losses(self, x_batches, y):
+        print('nn problem predict')
         y_pred = predict_from_batches(self.moo_model,
                                       x_batches,
                                       to_numpy=False,
@@ -318,6 +331,7 @@ class TFSplitProblem(TFProblem):
                  base_batch_size=None,
                  moo_batch_size=None,
                  use_gpu=True,
+                 mini_batch_size=None
                  ):
         model = get_one_output_model(model, output_layer_name)
         models = split_model(model, intermediate_layers)
@@ -342,4 +356,5 @@ class TFSplitProblem(TFProblem):
                          moo_batch_size=moo_batch_size,
                          x_tol_for_hash=x_tol_for_hash,
                          use_gpu=use_gpu,
-                         constraints_limits=constraints_limits)
+                         constraints_limits=constraints_limits,
+                         mini_batch_size=mini_batch_size)

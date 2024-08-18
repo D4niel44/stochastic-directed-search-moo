@@ -70,6 +70,11 @@ def batch_from_list_or_array(input_, batch_size=None):
         batched = batch_array(input_, batch_size)
     return batched
 
+def select_batch_sample(batched, sample_idx):
+    sample = []
+    for i in sample_idx:
+        sample.append(batched[i])
+    return sample
 
 def predict_from_batches(model,
                          batches,

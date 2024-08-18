@@ -17,6 +17,7 @@ from src.timeseries.moo.sds.utils.bash import get_input_args
 from src.timeseries.moo.sds.utils.indicators import metrics_of_pf
 from src.timeseries.moo.sds.utils.util import get_from_dict
 from src.timeseries.moo.experiments.util import nonlinear_weights_selection
+from src.timeseries.moo.experiments.moea_result import MoeaResult
 from src.timeseries.utils.moo import sort_1st_col
 from pymoo.operators.sampling.rnd import FloatRandomSampling
 from pymoo.operators.mutation.pm import PolynomialMutation
@@ -30,7 +31,7 @@ from src.sds.nn.utils import params_conversion_weights
 
 class MetricsCallback(Callback):
 
-    def __init__(self, problem, t0, ref_point, skip_train_metrics=False) -> None:
+    def __init__(self, problem, t0, ref_point, skip_train_metrics=False, is_mini_batch=False) -> None:
         super().__init__()
         self.problem = problem
         self.t0 = t0
@@ -39,6 +40,7 @@ class MetricsCallback(Callback):
         self.data["train_metrics"] = []
         self.ref_point = ref_point
         self.skip_train_metrics = skip_train_metrics
+        self.is_mini_batch = is_mini_batch
 
     def notify(self, algorithm, **kwargs):
         X = algorithm.pop.get("X")
@@ -51,6 +53,14 @@ class MetricsCallback(Callback):
         if not skip_train_metrics:
             train_metrics = metrics_of_pf(algorithm.pop.get("F"), ref=self.ref_point)
             self.data["train_metrics"].append(train_metrics)
+
+            # If mini batch, evaluate the whole training dataset on the last gen
+            if self.is_mini_batch and algorithm.termination.has_terminated():
+                F = problem.eval_individuals(X, 'train', eval_all=True)
+                _, F_moea_sorted = sort_1st_col(X, F)
+                train_metrics_last = metrics_of_pf(F_moea_sorted, ref=self.ref_point)
+                self.data["train_metrics_last"] = train_metrics_last
+
 
 def optimal_reference_point(problem_size):
     if problem_size == 'small':
@@ -100,6 +110,7 @@ if __name__ == '__main__':
     n_gen = config['generations']
     skip_train_metrics = config['skip_train_metrics']
     use_non_linear_reference_directions = 'nonlinear_reference_directions' in config
+    mini_batch_size = config['mini_batch_size'] if 'mini_batch_size' in config else None
     ## ------------------------------------
 
     sds_cfg['model']['ix'] = get_input_args()['model_ix']
@@ -109,10 +120,15 @@ if __name__ == '__main__':
     sds_cfg['sds']['max_increment'] = None if sds_cfg['problem']['split_model'] == 'medium' else 0.05
     sds_cfg['sds']['step_size'] = 2.5e-2 if sds_cfg['problem']['split_model'] == 'medium' else 5e-3
 
+    if 'moo_batch_size' in config:
+        sds_cfg['problem']['moo_batch_size'] = config['moo_batch_size']
+        print('custom moo batch')
+        print(sds_cfg)
+
     print('Model ix: {}'.format(get_from_dict(sds_cfg, ['model', 'ix'])))
 
     model_params, results_folder = get_model_and_params(sds_cfg, project)
-    problem = get_ts_problem(sds_cfg, model_params, test_ss=False)
+    problem = get_ts_problem(sds_cfg, model_params, test_ss=False, mini_batch_size=mini_batch_size)
 
     if use_non_linear_reference_directions:
         k = config['nonlinear_reference_directions']['k']
@@ -161,16 +177,18 @@ if __name__ == '__main__':
                            seed=seed,
                            save_history=False,
                            verbose=True,
-                           callback=MetricsCallback(problem, t0, optimal_reference_point(problem_size)))
+                           callback=MetricsCallback(problem, t0, optimal_reference_point(problem_size), is_mini_batch=mini_batch_size is not None))
 
-            if skip_train_metrics:
-                joblib.dump(
-                 (res.opt, res.algorithm.callback.data["times"], res.algorithm.callback.data["metrics"]),
-                 os.path.join(args.path, f'{moea.__name__}_{sds_cfg["problem"]["split_model"]}_results_{seed}.z'),
-                 compress=9)
-            else:
-                joblib.dump(
-                 (res.opt, res.algorithm.callback.data["times"], res.algorithm.callback.data["metrics"], res.algorithm.callback.data["train_metrics"]),
-                 os.path.join(args.path, f'{moea.__name__}_{sds_cfg["problem"]["split_model"]}_results_{seed}.z'),
-                 compress=9)
-        
+            moea_result = MoeaResult(
+                res.opt,
+                res.algorithm.callback.data['times'],
+                res.algorithm.callback.data['metrics'],
+                res.algorithm.callback.data['train_metrics'] if not skip_train_metrics else None,
+                res.algorithm.callback.data['train_metrics_last'] if mini_batch_size else None
+            )
+            joblib.dump(
+                moea_result,
+                os.path.join(args.path, f'{moea.__name__}_{sds_cfg["problem"]["split_model"]}_results_{seed}.z'),
+                compress=9
+            )
+

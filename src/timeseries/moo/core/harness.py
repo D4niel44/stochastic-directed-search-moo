@@ -59,7 +59,7 @@ def run_cont_problem(ds_cont, problem):
     return results, metrics
 
 
-def get_ts_problem(cont_cfg, model_params, test_ss=True, use_gpu=True):
+def get_ts_problem(cont_cfg, model_params, test_ss=True, use_gpu=True, mini_batch_size=None):
     t0 = time.time()
     problem = TsQuantileProblem(y_train=model_params['datasets']['train']['y'],
                                 x_train=model_params['datasets']['train']['x'],
@@ -74,7 +74,8 @@ def get_ts_problem(cont_cfg, model_params, test_ss=True, use_gpu=True):
                                 base_batch_size=cont_cfg['problem']['base_batch_size'],
                                 moo_batch_size=cont_cfg['problem']['moo_batch_size'],
                                 moo_model_size=cont_cfg['problem']['split_model'],
-                                use_gpu=use_gpu)
+                                use_gpu=use_gpu,
+                                mini_batch_size=mini_batch_size)
 
     print('init core time: {}'.format(round(time.time() - t0, 4)))
     times = subroutine_times_problem(problem)

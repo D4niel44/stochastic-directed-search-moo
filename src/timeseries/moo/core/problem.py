@@ -22,6 +22,7 @@ class TsQuantileProblem(TFSplitProblem):
                  moo_batch_size=None,
                  moo_model_size='small',
                  use_gpu=True,
+                 mini_batch_size=None
                  ):
 
         self.quantile_ix = quantile_ix
@@ -50,7 +51,8 @@ class TsQuantileProblem(TFSplitProblem):
                          moo_batch_size=moo_batch_size,
                          x_tol_for_hash=x_tol_for_hash,
                          use_gpu=use_gpu,
-                         constraints_limits=constraints_limits)
+                         constraints_limits=constraints_limits,
+                         mini_batch_size=mini_batch_size)
 
     def _get_losses(self, x_batches, y):
         y_pred = predict_from_batches(self.moo_model,
