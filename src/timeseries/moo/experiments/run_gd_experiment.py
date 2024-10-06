@@ -2,6 +2,7 @@
 import argparse
 import os
 import copy
+import time
 import tensorflow as tf
 
 import yaml
@@ -241,6 +242,7 @@ def run():
         end = len(weights)
 
     if normalize_loss:
+        t0 = time.time()
         res0 = model.train(
             0.0,
             epochs,
@@ -252,6 +254,8 @@ def run():
                 qel(model.quantile_loss_calculator, model.quantile_ix),
             ],
         )
+        res0.history['time'] = time.time() - t0
+        t0 = time.time()
         res1 = model.train(
             1.0,
             epochs,
@@ -263,6 +267,7 @@ def run():
                 qel(model.quantile_loss_calculator, model.quantile_ix),
             ],
         )
+        res1.history['time'] = time.time() - t0
         min_f1 = res1.history['quantile_coverage_loss'][-1]
         max_f1 = res0.history['quantile_coverage_loss'][-1]
         min_f2 = res0.history['quantile_estimation_loss'][-1]
@@ -280,6 +285,7 @@ def run():
         if normalize_loss and weight == 1.0:
             res = res1
         else:
+            t0 = time.time()
             res = model.train(
                 weight,
                 epochs,
@@ -287,6 +293,7 @@ def run():
                 initial_weights=(initial_weights[i] if 'initial_weight' in config else None),
                 save_path=os.path.join(args.path, f'model_w{start+i}.keras'),
             )
+            res.history['time'] = time.time() - t0
         results.append(res.history)
         
     if (end - start) < len(weights): 
