@@ -17,7 +17,7 @@ from src.timeseries.moo.sds.utils.bash import get_input_args
 from src.timeseries.moo.sds.utils.indicators import metrics_of_pf
 from src.timeseries.moo.sds.utils.util import get_from_dict
 from src.timeseries.moo.experiments.util import nonlinear_weights_selection
-from src.timeseries.moo.experiments.moea_result import MoeaResult
+from src.timeseries.moo.experiments.experiment import MoeaResult
 from src.timeseries.utils.moo import sort_1st_col
 from pymoo.operators.sampling.rnd import FloatRandomSampling
 from pymoo.operators.mutation.pm import PolynomialMutation

@@ -84,19 +84,28 @@ def plot_cd_diagram(res_dict, path, moeas, ref, n_gen, recalculate_hv=False, fil
 
 def mean_std_table(times_dict, res_dict, path, moeas, ref, problem_size, pop_size, n_gen, recalculate_hv=False, file_prefix=''):
     gens_res = []
+    hv_map = {}
+    c = n_gen - 1
+
+    for moea in moeas:
+        hv_map[moea] = np.mean([get_hypervolume(r[c]['F'], ref) for r in res_dict[moea]] if recalculate_hv else [r[c]['hv'] for r in res_dict[moea]])
+
+    max_hv = max(hv_map.values())
+
     for moea in moeas:
         times, moea_results = times_dict[moea], res_dict[moea]
 
-        c = n_gen - 1
         ts = [t[c] for t in times]
 
         distances = [r[c]['distances'] for r in moea_results]
         distances = [item for listoflists in distances for item in listoflists]
         hvs = [get_hypervolume(r[c]['F'], ref) for r in moea_results] if recalculate_hv else [r[c]['hv'] for r in moea_results]
 
+
         gens_res.append({'method': moea.__name__,
                          'time': '{:.2f} ({:.2f})'.format(np.mean(ts), np.std(ts)),
                          'hv': '{:.4f} ({:.2E})'.format(np.mean(hvs), np.std(hvs)),
+                         'relative hv': '{:.4f}'.format(1 - ((max_hv - hv_map[moea]) / max_hv)),
                          'distance': '{:.2E} ({:.2E})'.format(np.mean(distances), np.std(distances)),
                          'f_evals': '{:,.2f} ({:.2f})'.format((c+1)*pop_size, 0)})
 

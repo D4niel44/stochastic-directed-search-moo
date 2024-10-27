@@ -9,6 +9,8 @@ from tqdm import tqdm
 import yaml
 
 from src.timeseries.utils.moo import get_hypervolume
+from src.timeseries.moo.experiments.moea_result import MoeaResult
+from src.timeseries.moo.experiments.experiment import Experiment, MoeaExperimentResult, WeightedSumExperimentResult
 
 def _parallel_load(path, n_repeat, problem_size, m):
     (i, moea) = m
@@ -39,7 +41,12 @@ def _parallel_load(path, n_repeat, problem_size, m):
     return moea, results, print_warning
 
 def load_result_file(path, moea, problem_size, seed):
-    return joblib.load(os.path.join(path, f'{moea.__name__}_{problem_size}_results_{seed}.z'))
+    try:
+        return joblib.load(os.path.join(path, f'{moea.__name__}_{problem_size}_results_{seed}.z'))
+    except ValueError as e:
+        print(f'path: {path}, moea: {moea}, problem_size: {problem_size}, seed: {seed}')
+        raise e
+        
  
 def load_results(path, moeas, n_repeat, problem_size, parallelize = True):
     res_dict = {}
@@ -52,22 +59,57 @@ def load_results(path, moeas, n_repeat, problem_size, parallelize = True):
     else:
         tasks = map(partial(_parallel_load, path, n_repeat, problem_size), enumerate(moeas))
     for moea, results, warning in tasks:
-        if type(results[0]) is tuple:
-            times_dict[moea] = [r[0] for r in results]
-            res_dict[moea] = [r[1] for r in results]
-        else:
-            times_dict[moea] = [r.times for r in results]
-            res_dict[moea] = [r.metrics for r in results]
         print_warning = print_warning | warning
+        times_dict[moea] = []
+        res_dict[moea] = []
+        for r in results:
+            if type(r) is tuple:
+                times_dict[moea].append(r[0])
+                res_dict[moea].append(r[1])
+            else:
+                times_dict[moea].append(r.times)
+                res_dict[moea].append(r.metrics)
     if print_warning:
         print(f'WARNING: The results in path {path} do not support validation F per generation')
     return times_dict, res_dict
+
+def load_moea_results_to_exp(path, moeas, n_repeat, problem_size, parallelize = True):
+    exp_res = []
+    print_warning = False
+    if parallelize:
+        tqdm.set_lock(RLock())
+        p = Pool(initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
+        tasks = p.map(partial(_parallel_load, path, n_repeat, problem_size), enumerate(moeas))
+    else:
+        tasks = map(partial(_parallel_load, path, n_repeat, problem_size), enumerate(moeas))
+    for moea, results, warning in tasks:
+        print_warning = print_warning | warning
+        single_algo_res = []
+        for r in results:
+            if type(r) is tuple:
+                single_algo_res.append(MoeaExperimentResult(MoeaResult(
+                    opt=None,
+                    times=r[0],
+                    metrics=r[1],
+                )))
+            else:
+                single_algo_res.append(MoeaExperimentResult(r))
+        exp_res.append(Experiment(moea.__name__, problem_size, single_algo_res))
+    if print_warning:
+        print(f'WARNING: The results in path {path} do not support validation F per generation')
+    return exp_res
+
+def load_ws_results_to_exp(path, problem_size):
+    ws_res = WeightedSumExperimentResult(joblib.load(os.path.join(path, 'results.z')))
+    return Experiment("WS", problem_size, [ws_res])
 
 def get_reference_point(res_dict):
     max_f1 = 0
     max_f2 = 0
     for res in chain.from_iterable(res_dict.values()):
-        F = res[-1]['F']
+        F = res[-1]['F'] if type(res[-1]) is dict else res
+        if type(res[-1]) is not dict:
+            print('WS', res)
         max_f1 = max(max_f1, max(F[:, 0]))
         max_f2 = max(max_f2, max(F[:, 1]))
     return max_f1 * 1.1, max_f2 * 1.1
