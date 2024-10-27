@@ -106,11 +106,6 @@ def mean_std_table(experiments, path, file_prefix=''):
     write_text_file(os.path.join(path, f'{file_prefix}results_table'),
                     latex_table(title, gens_res_df.to_latex(escape=False, index=False)))
 
-def get_median_run(results, ref, recalculate_hv=True):
-    sorted_results = sorted(results, key=lambda r: get_hypervolume(r[-1]['F'], ref) if recalculate_hv else r[-1]['hv'])
-    return sorted_results[len(sorted_results)//2]
-
-
 def plot_median_evo(experiments, size, path, file_prefix=''):
     ref_point = experiments.compute_reference_point(size)
 
