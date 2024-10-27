@@ -35,23 +35,6 @@ NAMES_TO_TITLE = {
         "WS": "Suma ponderada",
 }
 
-def get_metrics_from_ws_res(ws_res):
-    f_res = []
-    times_res = []
-#    for res in ws_res:
-#        qcr = res['val_quantile_coverage_risk']
-#        qer = res['val_quantile_estimation_risk']
-#        f_res.append([[qcr[i], qer[i]] for i in range(len(qcr))])
-#        times_res.append(res['time'])
-
-    for res in ws_res:
-        qcr = res['val_quantile_coverage_risk']
-        qer = res['val_quantile_estimation_risk']
-        f_res.append([qcr[-1], qer[-1]])
-        times_res.append(res['time'])
-    return [np.array(f_res)], np.array(times_res)
-
-
 def compute_hv(algo, res, ref, recalculate_hv=False):
     if algo == 'WS':
         return get_hypervolume(res, ref)
@@ -136,11 +119,11 @@ def plot_median_evo(experiments, size, path, file_prefix=''):
     fig.supylabel("hv")
 
     for name, exp in experiments.size_iter(size):
-        res = exp.get_median_result(ref_point)
-        if not res.is_multi_gen_exp():
+        if not exp.is_multi_gen_exp():
             # We want to skip Weighted sum, since plotting HV per gen doesn't make sense
             continue
-        x_axis = [i for i in range(1, res.get_generations()+1)]
+        x_axis = [i for i in range(1, exp.get_generations()+1)]
+        res = exp.get_median_result(ref_point)
         y_axis = res.compute_hv_per_generation(ref_point)
 
         plt.plot(x_axis, y_axis, label = NAMES_TO_TITLE[exp.get_name()])

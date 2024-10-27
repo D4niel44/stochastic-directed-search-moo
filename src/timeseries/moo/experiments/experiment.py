@@ -26,10 +26,6 @@ class ExperimentResult(ABC):
     def get_generations(self) -> int:
         pass
 
-    # True if the experiments is a multi generation one.
-    def is_multi_gen_exp(self) -> bool:
-        return self.get_generations() > 1
-
     @cache
     def compute_hv_per_generation(self, ref_point):
         return [get_hypervolume(eval, ref_point) for eval in self.get_evaluation_per_generation()]
@@ -93,6 +89,22 @@ class Experiment:
         self._name = algo_name
         self._size = size
         self._res = results
+
+        self._gens = self._get_and_validate_generations()
+
+    def _get_and_validate_generations(self) -> int:
+        generations = self._res[0].get_generations()
+        for res in self._res:
+            if res.get_generations() != generations:
+                raise ValueError("Two results in same experiment have different number of generations")
+
+        return generations
+
+    def get_generations(self) -> int:
+        return self._gens
+
+    def is_multi_gen_exp(self) -> bool:
+        return self.get_generations() > 1
 
     def get_name(self) -> str:
         return self._name
