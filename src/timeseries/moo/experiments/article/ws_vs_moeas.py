@@ -1,14 +1,13 @@
-import joblib
 import sys
 import argparse
 import os
 from itertools import chain
 import yaml
-import numpy as np
 
 from src.timeseries.moo.experiments.config import moea_map
 from src.timeseries.moo.experiments.util import load_moea_results_to_exp, load_ws_results_to_exp
 from src.timeseries.moo.experiments.experiment import CompositeExperimentBuilder
+from src.timeseries.moo.experiments.article.visualization import ResultVisualization
 
 NAMES_TO_TITLE = {
         "NSGA2": "NSGA-II",
@@ -67,8 +66,8 @@ if __name__ == '__main__':
 
     vis.plot_cd_diagram()
     vis.mean_std_table()
+    vis.plot_median_evo()
 
     for size in experiments.get_problem_sizes():
-        vis.plot_median_evo(size)
         vis.plot_pareto_front(size)
 

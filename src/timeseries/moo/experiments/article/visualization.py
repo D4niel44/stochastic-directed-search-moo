@@ -94,28 +94,57 @@ class ResultVisualization():
         write_text_file(os.path.join(self.path, f'{self.file_prefix}results_table'),
                         latex_table(title, gens_res_df.to_latex(escape=False, index=False)))
 
-    def plot_median_evo(self, size):
-        ref_point = self.experiments.compute_reference_point(size)
+    def plot_median_evo(self):
+        fig = plt.figure(constrained_layout=True, figsize=(6, 8), dpi=400)
+        axd = fig.subplot_mosaic(
+            """
+            L
+            A
+            A
+            A
+            B
+            B
+            B
+            C
+            C
+            C
+            """
+        )
 
-        fig = plt.figure()
+        size_to_axes = {
+            "small": "A",
+            "medium": "B",
+            "large": "C",
+        }
+        size_to_title = {
+            "small": "Problema pequeño",
+            "medium": "Problema mediano",
+            "large": "Problema grande",
+        }
+
         fig.supxlabel("generaciones")
         fig.supylabel("hv")
 
-        for name, exp in self.experiments.size_iter(size):
+        for name, size, exp in self.experiments.exp_iter():
             if not exp.is_multi_gen_exp():
                 # We want to skip Weighted sum, since plotting HV per gen doesn't make sense
                 continue
+            ref_point = self.experiments.compute_reference_point(size)
             x_axis = [i for i in range(1, exp.get_generations()+1)]
             res = exp.get_median_result(ref_point)
             y_axis = res.compute_hv_per_generation(ref_point)
 
-            plt.plot(x_axis, y_axis, label = self.names_to_title[name])
+            ax = axd[size_to_axes[size]]
+            ax.set_title(size_to_title[size])
+            ax.plot(x_axis, y_axis, label = self.names_to_title[name])
+
+        axd['L'].axis('off')
+        handles, labels = axd['A'].get_legend_handles_labels()
+        axd['L'].legend(handles, labels, loc="upper center", ncol=4, mode="expand")
 
 
-        #plt.title('Median evolution')
-        plt.legend()
-        plt.savefig(os.path.join(self.path, f'{self.file_prefix}_{size}_median_evo_graph.pgf'))
-        plt.savefig(os.path.join(self.path, f'{self.file_prefix}_{size}_median_evo_graph.png'))
+        plt.savefig(os.path.join(self.path, f'{self.file_prefix}median_evo_graph.pgf'))
+        plt.savefig(os.path.join(self.path, f'{self.file_prefix}median_evo_graph.png'))
         plt.close(fig)
 
     def plot_pareto_front(self, size):
@@ -138,10 +167,6 @@ class ResultVisualization():
 
         ref_point = self.experiments.compute_reference_point(size)
 
-        # Create a sub dir for pareto fronts of this size
-        subdir_name = f'{size}_pareto_front'
-        Path(os.path.join(self.path, subdir_name)).mkdir(exist_ok=True)
-
         for name, exp in self.experiments.size_iter(size):
             res = exp.get_median_result(ref_point)
             F = res.get_evaluation()
@@ -149,8 +174,8 @@ class ResultVisualization():
             axd[names_to_axes[name]].scatter(F[:, 0], F[:, 1], s=30, facecolors='none', edgecolors='blue')
             axd[names_to_axes[name]].set_title(self.names_to_title[name])
 
-        fig.savefig(os.path.join(self.path, subdir_name, f'{self.file_prefix}pareto_front.png'))
-        fig.savefig(os.path.join(self.path, subdir_name, f'{self.file_prefix}pareto_front.pgf'))
+        fig.savefig(os.path.join(self.path, f'{self.file_prefix}pareto_front.png'))
+        fig.savefig(os.path.join(self.path, f'{self.file_prefix}pareto_front.pgf'))
         plt.close(fig)
 
 
