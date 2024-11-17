@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from enum import Enum
 from functools import cache
 from typing import List, Any, Tuple
 
@@ -83,12 +84,17 @@ class WeightedSumExperimentResult(ExperimentResult):
     def get_evaluation_per_generation(self) -> Any:
         return [self.get_evaluation]
 
+class Tag(Enum):
+    ALGORITHM = 'algorithm'
+    BATCH_SIZE = 'batch size'
+
 # Multiple executions of a single algo & size
 class Experiment:
     def __init__(self, algo_name: str, size: str, results: List[ExperimentResult]):
         self._name = algo_name
         self._size = size
         self._res = results
+        self._tags = {}
 
         self._gens = self._get_and_validate_generations()
 
@@ -99,6 +105,14 @@ class Experiment:
                 raise ValueError("Two results in same experiment have different number of generations")
 
         return generations
+
+    def set_tag(self, tag: Tag, value: any):
+        self._tags[tag.value] = value
+
+    def get_tag(self, tag: Tag) -> any:
+        if tag.value not in self._tags:
+            raise ValueError(f"Tag {tag} is not defined for exp {self._name}")
+        return self._tags[tag.value]
 
     def get_generations(self) -> int:
         return self._gens
@@ -144,7 +158,6 @@ class Experiment:
                 max_f[i] = max(max_f[i], r_max_f)
         return max_f
 
-
 # Holds experiments of multiple algos and sizes
 class CompositeExperiment:
 
@@ -165,6 +178,12 @@ class CompositeExperiment:
 
         return problem_sizes
 
+    def get_names(self):
+        names = set()
+        for name, _, _ in self.exp_iter():
+            names.add(name)
+
+        return names
 
     # Iterates over each expriments. Yields (name, size, exp) tuples.
     def exp_iter(self):
@@ -185,6 +204,16 @@ class CompositeExperiment:
             for exp in exp_list:
                 yield (size, exp)
 
+    def group_by(self, key_func):
+        buckets = {}
+        for _, _, exp in self.exp_iter():
+            key = key_func(exp)
+            if key not in buckets:
+                buckets[key] = []
+            buckets[key].append(exp)
+
+        return buckets.items()
+
     # Computes the ref point for experiments of a given size.
     @cache
     def compute_reference_point(self, size: str, scale=1.1):
@@ -197,6 +226,15 @@ class CompositeExperiment:
 
         # Return scaled
         return tuple([v * scale for v in ref_point])
+
+def name_grouping():
+    return lambda exp: exp.get_name()
+
+def tag_grouping(tag: Tag):
+    return lambda exp: exp.get_tag(tag)
+
+def size_filter(size):
+    return lambda exp: exp.get_problem_size() == size
 
 class CompositeExperimentBuilder:
     def __init__(self):
@@ -229,10 +267,4 @@ class CompositeExperimentBuilder:
 
     def build(self) -> CompositeExperiment:
         return CompositeExperiment(self._map, self._n_obj, self._gen_map)
-
-
-
-
-
-
 

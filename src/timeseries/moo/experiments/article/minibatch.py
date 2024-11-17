@@ -5,12 +5,61 @@ import yaml
 import pandas as pd
 import numpy as np
 
-from src.timeseries.utils.critical_difference import draw_cd_diagram
-from src.timeseries.utils.moo import get_hypervolume
 from src.timeseries.moo.experiments.config import moea_map
-from src.timeseries.utils.util import write_text_file
-from src.timeseries.moo.experiments.util import get_reference_point, load_results, parse_reference_point_arg
-from src.timeseries.utils.util import latex_table, write_text_file
+from src.timeseries.moo.experiments.util import load_moea_results_to_exp
+from src.timeseries.moo.experiments.experiment import CompositeExperimentBuilder, size_filter, tag_grouping
+from src.timeseries.moo.experiments.article.visualization import ResultVisualization
+from src.timeseries.moo.experiments.experiment import CompositeExperimentBuilder, Tag
+
+BATCH_SIZE_TO_TITLE = {
+    0: 'Sin minibatch',
+    512: '512',
+    1024: '1024',
+}
+
+NAMES_TO_TITLE = {
+        'NSGA2': 'NSGA-II',
+        'NSGA2 (512)': 'NSGA-II (512)',
+        'NSGA2 (1024)': 'NSGA-II (1024)',
+
+        'NSGA3': 'NSGA-III',
+        'NSGA3 (512)': 'NSGA-III (512)',
+        'NSGA3 (1024)': 'NSGA-III (1024)',
+
+        'MOEAD': 'MOEA/D',
+        'MOEAD (512)': 'MOEA/D (512)',
+        'MOEAD (1024)': 'MOEA/D (1024)',
+
+        'SMSEMOA': 'SMS-EMOA',
+        'SMSEMOA (512)': 'SMS-EMOA (512)',
+        'SMSEMOA (1024)': 'SMS-EMOA (1024)',
+}
+
+LAYOUT = """
+    ABC
+    DEF
+    GHI
+    JKL
+"""
+
+
+NAMES_TO_AXES = {
+    'NSGA2': 'A',
+    'NSGA2 (512)': 'B',
+    'NSGA2 (1024)': 'C',
+
+    'NSGA3': 'D',
+    'NSGA3 (512)': 'E',
+    'NSGA3 (1024)': 'F',
+
+    'MOEAD': 'G',
+    'MOEAD (512)': 'H',
+    'MOEAD (1024)': 'I',
+
+    'SMSEMOA': 'J',
+    'SMSEMOA (512)': 'K',
+    'SMSEMOA (1024)': 'L',
+}
 
 def plot_cd_diagram(batch_size_dict, path, recalculate_hv=False, file_prefix=''):
     run_res = []
@@ -101,7 +150,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Analyze results of experiment.')
     parser.add_argument('--end', type=int, dest='end_seed', default=None, help='end running the experiment before the given seed (exclusive)')
     parser.add_argument('--use_default_hv', action='store_true', dest='default_hv', help='use the default HV instead of recalculating it')
-    parser.add_argument('--ref_point', dest='ref_point', type=parse_reference_point_arg, default=None, help='provide a custom reference point for HV')
     parser.add_argument('exp_path', help='path of the experiment config')
     parser.add_argument('--file_prefix', default='', help='prefix to add to file names')
     parser.add_argument('--subfolder_name', default='results', help='name of the subfolder that will contain the output of this script (defaults to results)')
@@ -114,58 +162,46 @@ if __name__ == '__main__':
 
     print(exp_config)
 
-    batch_size_dict = {}
+    exp_builder = CompositeExperimentBuilder()
+    exp_builder.set_number_objectives(2)
+
+
     for batch_size, cfg in chain.from_iterable(c.items() for c in exp_config['batch_sizes']):
-        problem_size_dict = {}
         for size, path in chain.from_iterable(c.items() for c in cfg['moeas']):
 
             config = None
             with open(os.path.join(path, "config.yaml"), 'r') as stream:
                 config = yaml.safe_load(stream)
 
-            project = 'snp'
+            n_gen = config['generations']
+            exp_builder.set_number_generations(size, n_gen)
+
             problem_size = config['problem_size']
             moeas = [moea_map[m] for m in config['moeas']]
             n_repeat = args.end_seed if args.end_seed is not None else config['number_runs']
-            pop_size = config['population_size']
-            n_gen = config['generations']
-            skip_train_metrics = config['skip_train_metrics'] if 'skip_train_metrics' in config else True
-            output_path = os.path.join(args.exp_path, args.subfolder_name)
-            ## ------------------------------------
+            exp_for_size = load_moea_results_to_exp(path, moeas, n_repeat, problem_size)
 
-            times_dict, res_dict = load_results(path, moeas, n_repeat, problem_size)
-            ref_point = args.ref_point if args.ref_point is not None else get_reference_point(res_dict)
-            print(ref_point)
+            for exp in exp_for_size:
+                exp.set_tag(Tag.ALGORITHM, exp.get_name())
+                exp.set_tag(Tag.BATCH_SIZE, batch_size)
 
-            problem_size_dict[size] = {
-                'times_dict': times_dict,
-                'res_dict': res_dict,
-                'ref_point': ref_point,
-                'pop_size': pop_size,
-                'n_gen': n_gen,
-                'n_repeat': n_repeat
-            }
-        batch_size_dict[batch_size] = problem_size_dict
+                if batch_size != 0:
+                    exp._name = exp._name + f" ({batch_size})"
+                exp_builder.add_experiment(exp)
 
-    # Fix ref point
-    size_to_ref_point = {}
-    for _, problem_size_dict in batch_size_dict.items():
-        for size, d in problem_size_dict.items():
-            if size in size_to_ref_point:
-                size_to_ref_point[size] = (max(size_to_ref_point[size][0], d['ref_point'][0]),
-                                           max(size_to_ref_point[size][1], d['ref_point'][1]),
-                                           )
-            else:
-                size_to_ref_point[size] = d['ref_point']
-    
-    for _, problem_size_dict in batch_size_dict.items():
-        for size, d in problem_size_dict.items():
-            d['ref_point'] = size_to_ref_point[size]
-    
-    recalculate_hv = not args.default_hv
+    experiments = exp_builder.build()
+    output_path = os.path.join(args.exp_path, args.subfolder_name)
     file_prefix = args.file_prefix
-    os.makedirs(output_path, exist_ok=True) 
 
-    #write_text_file(os.path.join(output_path, 'reference_point'), str(ref_point))
-    plot_cd_diagram(batch_size_dict, output_path, recalculate_hv, file_prefix)
-    mean_std_table(batch_size_dict, output_path, recalculate_hv, file_prefix)
+    vis = ResultVisualization(experiments, output_path, int(n_repeat), NAMES_TO_TITLE, file_prefix)
+    vis.mean_std_table_mb()
+
+    for size in experiments.get_problem_sizes():
+        vis.plot_cd_diagram(
+            group_key_func=tag_grouping(Tag.BATCH_SIZE),
+            group_to_title=BATCH_SIZE_TO_TITLE,
+            filter_func=size_filter(size),
+            prefix=size+'_',
+        )
+        vis.plot_median_evo_mb(size_filter(size), prefix=size+'_')
+        vis.plot_pareto_front(size, LAYOUT, NAMES_TO_AXES, figsize=(6,8))

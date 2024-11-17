@@ -14,20 +14,17 @@ NAMES_TO_TITLE = {
         "NSGA3": "NSGA-III",
         "MOEAD": "MOEA/D",
         "SMSEMOA": "SMS-EMOA",
+        "MOEAD (NRD)": "MOEA/D (NL)",
         "WS": "Suma ponderada",
 }
 
 LAYOUT = """
-         AABBCC
-         .DDEE.
+         AB
          """
 
 NAMES_TO_AXES = {
-    "NSGA2": "A",
-    "NSGA3": "B",
-    "MOEAD": "C",
-    "SMSEMOA": "D",
-    "WS": "E",
+    "MOEAD": "A",
+    "MOEAD (NRD)": "B",
 }
 
 # %%
@@ -48,11 +45,34 @@ if __name__ == '__main__':
 
     exp_builder = CompositeExperimentBuilder()
     exp_builder.set_number_objectives(2)
+    moead_only_builder = CompositeExperimentBuilder()
+    moead_only_builder.set_number_objectives(2)
 
     # Gradient Descent
     for size, ws_path in chain.from_iterable(c.items() for c in exp_config['gd']):
         ws_exp = load_ws_results_to_exp(ws_path, size)
         exp_builder.add_experiment(ws_exp)
+
+    # MOEA/D NL
+    for size, path in chain.from_iterable(c.items() for c in exp_config['moead']):
+        config = None
+        with open(os.path.join(path, "config.yaml"), 'r') as stream:
+            config = yaml.safe_load(stream)
+
+        n_gen = config['generations']
+        exp_builder.set_number_generations(size, n_gen)
+        moead_only_builder.set_number_generations(size, n_gen)
+
+        problem_size = config['problem_size']
+        moeas = [moea_map[m] for m in config['moeas']]
+        n_repeat = args.end_seed if args.end_seed is not None else config['number_runs']
+        exp_for_size = load_moea_results_to_exp(path, moeas, n_repeat, problem_size)
+
+        for exp in exp_for_size:
+            if exp.get_name() == "MOEAD":
+                exp._name = "MOEAD (NRD)"
+                exp_builder.add_experiment(exp)
+                moead_only_builder.add_experiment(exp)
 
     # MOEAs
     for size, path in chain.from_iterable(c.items() for c in exp_config['moeas']):
@@ -70,6 +90,8 @@ if __name__ == '__main__':
 
         for exp in exp_for_size:
             exp_builder.add_experiment(exp)
+            if exp.get_name() == "MOEAD":
+                moead_only_builder.add_experiment(exp)
 
     experiments = exp_builder.build()
     output_path = os.path.join(args.exp_path, args.subfolder_name)
@@ -79,8 +101,10 @@ if __name__ == '__main__':
 
     vis.plot_cd_diagram()
     vis.mean_std_table()
-    vis.plot_median_evo()
+
+    vis_moead_only = ResultVisualization(moead_only_builder.build(), output_path, int(n_repeat), NAMES_TO_TITLE, file_prefix)
+    vis_moead_only.plot_median_evo()
 
     for size in experiments.get_problem_sizes():
-        vis.plot_pareto_front(size, LAYOUT, NAMES_TO_AXES, figsize=(6,4))
+        vis_moead_only.plot_pareto_front(size, LAYOUT, NAMES_TO_AXES, figsize=(6,3))
 
