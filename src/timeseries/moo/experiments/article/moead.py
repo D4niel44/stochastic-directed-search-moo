@@ -15,7 +15,7 @@ NAMES_TO_TITLE = {
         "MOEAD": "MOEA/D",
         "SMSEMOA": "SMS-EMOA",
         "MOEAD (NRD)": "MOEA/D (NL)",
-        "WS": "Suma ponderada",
+        "WS": "Suma ponderada (NL)",
 }
 
 LAYOUT = """

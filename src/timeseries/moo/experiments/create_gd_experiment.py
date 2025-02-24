@@ -8,6 +8,9 @@ from src.timeseries.moo.experiments.config import moea_map, supported_moeas, sup
 def generate_uniform_combinations(n):
     # Include 0 and 1 in combinations
     return [i/n for i in range(n + 1)]
+
+def generate_uniform_combinations_greater_zero(n):
+    return [i/(n + 1) for i in range(1, n + 1)]
 # %%
 if __name__ == '__main__':
     ## --------------- CFG ---------------
@@ -25,17 +28,20 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, dest='number_epochs', default=5, help='number of epochs to train')
     parser.add_argument('--skip_train_metrics', action='store_true', help="don't store metrics each generation using the train dataset (only the validation dataset will be used)")
     parser.add_argument('--normalize_loss', action='store_true', help="use normalized loss during training")
+    parser.add_argument('--nonzero_weight', action='store_true', help="No weight combination with zero weight")
     parser.add_argument('path', help='path to store the experiment folder')
 
     args = parser.parse_args()
 
-    p = os.path.join(args.path, f'exp_{args.problem_size}_n{args.number_combinations}_norm{args.normalize_loss}_e{args.number_epochs}{"_iw" if args.initial_weight_path is not None else ""}')
+    p = os.path.join(args.path, f'exp_{args.problem_size}_n{args.number_combinations}_norm{args.normalize_loss}_e{args.number_epochs}{"_iw" if args.initial_weight_path is not None else ""}_v2')
     os.makedirs(p)
+
+    combinations_func = generate_uniform_combinations_greater_zero if args.nonzero_weight else generate_uniform_combinations
 
     config = {
         'algorithm': 'GD',
         'problem_size': args.problem_size,
-        'combinations': generate_uniform_combinations(args.number_combinations),
+        'combinations': combinations_func(args.number_combinations),
         'epochs': args.number_epochs,
         'skip_train_metrics': args.skip_train_metrics,
         'normalize_loss': args.normalize_loss,

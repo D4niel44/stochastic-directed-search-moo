@@ -99,8 +99,8 @@ class ResultVisualization():
     def mean_std_table_mb(self):
         gens_res = []
 
-        for size in self.experiments.get_problem_sizes():
-           for batch_size, exps in self.experiments.group_by(tag_grouping(Tag.BATCH_SIZE)):
+        for batch_size, exps in self.experiments.group_by(tag_grouping(Tag.BATCH_SIZE)):
+            for size in self.experiments.get_problem_sizes():
                 t_row = {
                     'metric': 'time',
                     'size': size,
@@ -112,7 +112,7 @@ class ResultVisualization():
                     'batch_size': batch_size
                 }
 
-                for exp in exps:
+                for exp in filter(lambda e: e.get_problem_size() == size, exps):
                     name = exp.get_tag(Tag.ALGORITHM)
 
                     # Time
@@ -257,6 +257,9 @@ class ResultVisualization():
         axd = fig.subplot_mosaic(layout, sharex=True, sharey=True)
 
         ref_point = self.experiments.compute_reference_point(size)
+
+        fig.supxlabel("QCR")
+        fig.supylabel("QER")
 
         for ax in axd.values():
             ax.xaxis.set_tick_params(labelbottom=True)

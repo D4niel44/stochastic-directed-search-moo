@@ -9,25 +9,30 @@ from src.timeseries.moo.experiments.util import load_moea_results_to_exp, load_w
 from src.timeseries.moo.experiments.experiment import CompositeExperimentBuilder
 from src.timeseries.moo.experiments.article.visualization import ResultVisualization
 
+import numpy
+print(numpy.__version__)
+
 NAMES_TO_TITLE = {
         "NSGA2": "NSGA-II",
         "NSGA3": "NSGA-III",
         "MOEAD": "MOEA/D",
         "SMSEMOA": "SMS-EMOA",
-        "WS": "Suma ponderada",
+        "WS": "Suma ponderada (NL)",
+        "WS-l": "Suma ponderada"
 }
 
 LAYOUT = """
          AABBCC
-         .DDEE.
+         DDEEFF
          """
 
 NAMES_TO_AXES = {
-    "NSGA2": "A",
-    "NSGA3": "B",
-    "MOEAD": "C",
-    "SMSEMOA": "D",
-    "WS": "E",
+    "NSGA2": "B",
+    "NSGA3": "C",
+    "MOEAD": "E",
+    "SMSEMOA": "F",
+    "WS-l": "A",
+    "WS": "D"
 }
 
 # %%
@@ -49,9 +54,15 @@ if __name__ == '__main__':
     exp_builder = CompositeExperimentBuilder()
     exp_builder.set_number_objectives(2)
 
-    # Gradient Descent
+    # Gradient Descent (Non linear)
     for size, ws_path in chain.from_iterable(c.items() for c in exp_config['gd']):
         ws_exp = load_ws_results_to_exp(ws_path, size)
+        exp_builder.add_experiment(ws_exp)
+    
+    # Gradient Descent (Linear)
+    for size, ws_path in chain.from_iterable(c.items() for c in exp_config['gdl']):
+        ws_exp = load_ws_results_to_exp(ws_path, size)
+        ws_exp._name = "WS-l"
         exp_builder.add_experiment(ws_exp)
 
     # MOEAs
@@ -82,5 +93,5 @@ if __name__ == '__main__':
     vis.plot_median_evo()
 
     for size in experiments.get_problem_sizes():
-        vis.plot_pareto_front(size, LAYOUT, NAMES_TO_AXES, figsize=(6,4))
+        vis.plot_pareto_front(size, LAYOUT, NAMES_TO_AXES, figsize=(6,4.5))
 

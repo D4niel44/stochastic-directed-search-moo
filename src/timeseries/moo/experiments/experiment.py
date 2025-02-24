@@ -69,9 +69,10 @@ class WeightedSumExperimentResult(ExperimentResult):
             times.append(res['time'])
 
         self._eval = np.array(eval)
-        self._times = np.array(eval)
+        self._times = np.array(times)
 
     def get_time(self) -> float:
+        print(self._times)
         return sum(self._times)
 
     def get_evaluation(self):
@@ -130,6 +131,8 @@ class Experiment:
         concatenated_times = []
         for res in self._res:
             concatenated_times.append(res.get_time())
+        print(self._res)
+        print(concatenated_times)
 
         return np.mean(concatenated_times), np.std(concatenated_times)
 
